@@ -1593,10 +1593,10 @@ def google_oauth():
 
     except ValueError as ve:
         print(f"Google token verification failed: {ve}")
-        return jsonify({"message": "Invalid or expired Google token"}), 401
+        return jsonify({"message": f"Invalid or expired Google token: {str(ve)}"}), 401
     except Exception as e:
         print(f"Google OAuth error: {str(e)}")
-        return jsonify({"message": "Google login failed"}), 400
+        return jsonify({"message": f"Google login failed: {str(e)}"}), 500
 
 @app.route("/github-login", methods=["POST"])
 @app.route("/api/github-login", methods=["POST"])

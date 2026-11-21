@@ -46,16 +46,22 @@ export function Login() {
   };
 
   const handleGoogleLogin = async (credentialResponse) => {
+    let authError = "";
     const success = await handleOAuthLogin(async () => {
-      return axios.post(
-        `${apiUrl}/api/auth/oauth/google`,
-        { credential: credentialResponse.credential },
-        { withCredentials: true }
-      );
+      try {
+        return await axios.post(
+          `${apiUrl}/api/auth/oauth/google`,
+          { credential: credentialResponse.credential },
+          { withCredentials: true }
+        );
+      } catch (err) {
+        authError = err?.response?.data?.message || err?.message || "";
+        throw err;
+      }
     });
 
     if (!success) {
-      setError(t("login.errors.google"));
+      setError(authError || t("login.errors.google"));
     }
   };
 
