@@ -38,8 +38,15 @@ export function Signup() {
     village: "",
   });
 
-  const { setUser, setIsAuthenticated, login, handleOAuthLogin } = useAuth();
+  const { isAuthenticated, setUser, setIsAuthenticated, login, handleOAuthLogin } = useAuth();
   const navigate = useNavigate();
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (isAuthenticated) {
+      navigate("/dashboard");
+    }
+  }, [isAuthenticated, navigate]);
 
   const locationData = {
     Gujarat: {
@@ -205,10 +212,12 @@ export function Signup() {
               <div className="flex flex-col items-center">
                 <div className="flex justify-center w-full overflow-hidden">
                   <GoogleLogin
-                    text="signup_with"
-                    shape="pill"
                     onSuccess={handleGoogleSignup}
                     onError={() => setError(t("signup.validation.google_signup_failed"))}
+                    shape="pill"
+                    theme="outline"
+                    size="large"
+                    text="signup_with"
                   />
                 </div>
                 <div className="flex items-center w-full my-5">

@@ -1541,10 +1541,18 @@ def google_oauth():
         user = users_collection.find_one({"email": decoded['email']})
 
         if not user:
+            base_username = decoded['email'].split('@')[0]
+            base_username = re.sub(r'[^a-zA-Z0-9_]', '', base_username) or "user"
+            username = base_username
+            counter = 1
+            while users_collection.find_one({"username": username}):
+                username = f"{base_username}{counter}"
+                counter += 1
+
             user = {
                 "email": decoded['email'],
-                "username": decoded['email'].split('@')[0],
-                "fullName": decoded.get('name'),
+                "username": username,
+                "fullName": decoded.get('name') or username,
                 "googleId": decoded.get('sub'),
                 "phone": "",
                 "state": "",
@@ -1557,18 +1565,27 @@ def google_oauth():
             user_id = str(result.inserted_id)
         else:
             user_id = str(user['_id'])
+            if not user.get("googleId") and decoded.get("sub"):
+                users_collection.update_one(
+                    {"_id": user["_id"]},
+                    {"$set": {"googleId": decoded.get("sub")}}
+                )
 
         session['user_id'] = user_id
         session.permanent = True
         auth_token = generate_token(user_id)
 
         return jsonify({
-            "message": "Google login successful",
+            "message": "Google authentication successful",
             "user": {
                 "id": user_id,
                 "username": user.get('username'),
                 "email": user.get('email'),
                 "fullName": user.get('fullName'),
+                "phone": user.get("phone", ""),
+                "state": user.get("state", ""),
+                "district": user.get("district", ""),
+                "village": user.get("village", ""),
                 "profileImage": user.get("profileImage", "")
             },
             "token": auth_token
