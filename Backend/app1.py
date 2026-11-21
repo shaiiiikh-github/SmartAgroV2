@@ -1529,7 +1529,7 @@ def google_oauth():
         if not token:
             return jsonify({"message": "Missing Google credential"}), 400
 
-        google_client_id = os.getenv("GOOGLE_CLIENT_ID")
+        google_client_id = os.getenv("GOOGLE_CLIENT_ID") or "358790138259-p5a5vrq1c8q6lj4umdchlc8o5bgkbp2r.apps.googleusercontent.com"
         # Verify the Google OAuth ID token using Google's public verification library
         decoded = google_id_token.verify_oauth2_token(
             token, google_requests.Request(), google_client_id

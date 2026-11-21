@@ -146,6 +146,7 @@
     "buttons": {
       "next_step": "अगला चरण",
       "back": "पीछे",
+      "create_account": "खाता बनाएं",
       "complete": "साइनअप पूरा करें",
       "processing": "खाता बनाया जा रहा है..."
     },

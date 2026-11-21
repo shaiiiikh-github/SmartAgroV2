@@ -50,12 +50,51 @@ export function Signup() {
 
   const locationData = {
     Gujarat: {
-      Ahmedabad: ["Village1", "Village2"],
-      Surat: ["Village3", "Village4"],
+      Ahmedabad: ["Bavla", "Dholka", "Sanand", "Viramgam", "Dhandhuka", "Other Village"],
+      Surat: ["Bardoli", "Mahuva", "Olpad", "Mangrol", "Mandvi", "Other Village"],
+      Vadodara: ["Padra", "Karjan", "Savli", "Waghodia", "Dabhoi", "Other Village"],
+      Rajkot: ["Gondal", "Jetpur", "Jasdan", "Dhoraji", "Upleta", "Other Village"],
+      Gandhinagar: ["Kalol", "Dehgam", "Mansa", "Other Village"],
+      Other: ["Local Area 1", "Local Area 2", "Other Village"],
     },
     Maharashtra: {
-      Pune: ["Village5", "Village6"],
-      Nagpur: ["Village7", "Village8"],
+      Pune: ["Haveli", "Baramati", "Shirur", "Junnar", "Khed", "Other Village"],
+      Nagpur: ["Kamptee", "Hingna", "Katol", "Saoner", "Umred", "Other Village"],
+      Nashik: ["Niphad", "Sinnar", "Dindori", "Malegaon", "Yeola", "Other Village"],
+      Aurangabad: ["Paithan", "Gangapur", "Vaijapur", "Kannad", "Other Village"],
+      Kolhapur: ["Karveer", "Hatkalangda", "Shirol", "Kagal", "Other Village"],
+      Other: ["Local Area 1", "Local Area 2", "Other Village"],
+    },
+    Punjab: {
+      Ludhiana: ["Jagraon", "Khanna", "Samrala", "Payal", "Other Village"],
+      Amritsar: ["Ajnala", "Baba Bakala", "Majitha", "Other Village"],
+      Patiala: ["Nabha", "Rajpura", "Samana", "Other Village"],
+      Other: ["Local Area 1", "Local Area 2", "Other Village"],
+    },
+    Haryana: {
+      Karnal: ["Assandh", "Gharaunda", "Indri", "Nilokheri", "Other Village"],
+      Hisar: ["Hansi", "Narnaund", "Barwala", "Other Village"],
+      Ambala: ["Barara", "Naraingarh", "Saha", "Other Village"],
+      Other: ["Local Area 1", "Local Area 2", "Other Village"],
+    },
+    "Uttar Pradesh": {
+      Varanasi: ["Pindra", "Rohania", "Sevapuri", "Other Village"],
+      Lucknow: ["Bakshi Ka Talab", "Mohanlalganj", "Sarojini Nagar", "Other Village"],
+      Kanpur: ["Bilhaur", "Ghatampur", "Chaubepur", "Other Village"],
+      Other: ["Local Area 1", "Local Area 2", "Other Village"],
+    },
+    "Madhya Pradesh": {
+      Indore: ["Depalpur", "Mhow", "Sanwer", "Other Village"],
+      Bhopal: ["Berasia", "Huzur", "Other Village"],
+      Other: ["Local Area 1", "Local Area 2", "Other Village"],
+    },
+    Rajasthan: {
+      Jaipur: ["Chaksu", "Kotputli", "Phulera", "Sanganer", "Other Village"],
+      Jodhpur: ["Bilara", "Bhopalgarh", "Osian", "Other Village"],
+      Other: ["Local Area 1", "Local Area 2", "Other Village"],
+    },
+    Other: {
+      "General District": ["Locality 1", "Locality 2", "Other Village"],
     },
   };
 
@@ -69,7 +108,14 @@ export function Signup() {
 
   const handleChange = (e) => {
     setError("");
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+    if (name === "state") {
+      setFormData((prev) => ({ ...prev, state: value, district: "", village: "" }));
+    } else if (name === "district") {
+      setFormData((prev) => ({ ...prev, district: value, village: "" }));
+    } else {
+      setFormData((prev) => ({ ...prev, [name]: value }));
+    }
   };
 
   const passwordRules = {
@@ -81,21 +127,38 @@ export function Signup() {
   };
 
   const validateStep1 = () => {
-    if (!formData.fullName || !formData.username)
-      return t("signup.validation.name_username_required");
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email))
-      return t("signup.validation.invalid_email");
-    if (!/^\d{10}$/.test(formData.phone)) return t("signup.validation.phone_length");
-    if (!passwordRules.length || !passwordRules.upper || !passwordRules.special)
-      return t("signup.validation.password_weak");
-    if (formData.password !== formData.confirmPassword)
-      return t("signup.validation.passwords_mismatch");
+    if (!formData.fullName.trim() || !formData.username.trim()) {
+      return t("signup.validation.name_username_required", "Please enter both your full name and username.");
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim())) {
+      return t("signup.validation.invalid_email", "Please enter a valid email address.");
+    }
+    const cleanPhone = formData.phone.replace(/[\s-]/g, "").replace(/^\+91/, "").replace(/^0/, "");
+    if (!/^\d{10}$/.test(cleanPhone)) {
+      return t("signup.validation.phone_length", "Please enter a valid 10-digit mobile number.");
+    }
+    if (!passwordRules.length) {
+      return t("signup.validation.password_min_length", "Password must be at least 8 characters long.");
+    }
+    if (!passwordRules.upper) {
+      return t("signup.validation.password_upper", "Password must contain at least one uppercase letter (A-Z).");
+    }
+    if (!passwordRules.special) {
+      return t("signup.validation.password_special", "Password must contain at least one special character (!@#$%^&*).");
+    }
+    if (formData.password !== formData.confirmPassword) {
+      return t("signup.validation.passwords_mismatch", "Passwords do not match.");
+    }
     return null;
   };
 
   const handleNext = () => {
     const err = validateStep1();
-    if (err) return setError(err);
+    if (err) {
+      setError(err);
+      return;
+    }
+    setError("");
     setStep(2);
   };
 
@@ -125,13 +188,18 @@ export function Signup() {
   };
 
   const handleSignup = async () => {
-    if (!formData.state || !formData.district || !formData.village)
-      return setError(t("signup.validation.location_required"));
-    if (!agreeTerms) return setError(t("signup.validation.agree_terms"));
+    if (!formData.state || !formData.district || !formData.village) {
+      return setError(t("signup.validation.location_required", "Please select your state, district, and village."));
+    }
+    if (!agreeTerms) {
+      return setError(t("signup.validation.agree_terms", "Please accept the Terms of Service to proceed."));
+    }
 
     setLoading(true);
     try {
-      const res = await axios.post(`${apiUrl}/api/auth/signup`, formData, { withCredentials: true });
+      const cleanPhone = formData.phone.replace(/[\s-]/g, "").replace(/^\+91/, "").replace(/^0/, "");
+      const payload = { ...formData, phone: cleanPhone };
+      const res = await axios.post(`${apiUrl}/api/auth/signup`, payload, { withCredentials: true });
       if (res.data?.token) {
         localStorage.setItem("smart_agro_token", res.data.token);
       }
@@ -146,7 +214,7 @@ export function Signup() {
       if (loginRes.success) navigate("/dashboard");
       else navigate("/login");
     } catch (err) {
-      setError(err.response?.data?.message || t("signup.validation.signup_failed_generic"));
+      setError(err.response?.data?.message || t("signup.validation.signup_failed_generic", "Signup failed. Please try again."));
     } finally {
       setLoading(false);
     }
@@ -304,6 +372,13 @@ export function Signup() {
                 </div>
               )}
 
+              {/* Prominent error directly above Step 1 Next button */}
+              {error && (
+                <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/25 text-red-700 dark:text-red-400 text-xs sm:text-sm font-semibold text-center">
+                  {error}
+                </div>
+              )}
+
               <GlassButton
                 variant="primary"
                 size="lg"
@@ -311,7 +386,7 @@ export function Signup() {
                 icon={ChevronRight}
                 className="w-full mt-2"
               >
-                {t("signup.buttons.next_step")}
+                {t("signup.buttons.next_step", "Next Step")}
               </GlassButton>
 
               <p className="text-center text-xs text-slate-700 dark:text-slate-300 font-medium pt-2">
@@ -408,15 +483,25 @@ export function Signup() {
                 </span>
               </label>
 
+              {/* Prominent error directly above Step 2 Action buttons */}
+              {error && (
+                <div className="p-3 rounded-2xl bg-red-500/10 border border-red-500/25 text-red-700 dark:text-red-400 text-xs sm:text-sm font-semibold text-center">
+                  {error}
+                </div>
+              )}
+
               <div className="flex gap-2.5 pt-2">
                 <GlassButton
                   variant="secondary"
                   size="lg"
-                  onClick={() => setStep(1)}
+                  onClick={() => {
+                    setError("");
+                    setStep(1);
+                  }}
                   icon={ChevronLeft}
                   className="w-1/3"
                 >
-                  Back
+                  {t("signup.buttons.back", "Back")}
                 </GlassButton>
                 <GlassButton
                   variant="primary"
@@ -425,7 +510,9 @@ export function Signup() {
                   isLoading={loading}
                   className="w-2/3"
                 >
-                  {t("signup.buttons.create_account")}
+                  {loading
+                    ? (t("signup.buttons.processing", "Creating Account..."))
+                    : (t("signup.buttons.create_account", "Create Account"))}
                 </GlassButton>
               </div>
             </motion.div>

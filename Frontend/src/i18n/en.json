@@ -146,6 +146,7 @@
     "buttons": {
       "next_step": "Next Step",
       "back": "Back",
+      "create_account": "Create Account",
       "complete": "Complete Signup",
       "processing": "Creating Account..."
     },
