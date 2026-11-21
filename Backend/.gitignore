@@ -1,0 +1,38 @@
+# Node.js dependencies and build artifacts
+/node_modules
+/dist
+.vite/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Environment variables
+.env
+.env.*
+*.env
+!.env.example
+
+# Local development and editor-specific files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Uploads and temporary generated files
+uploads/
+sensor_readings.xlsx
+
+# Testing
+/coverage
+/cypress/videos
+/cypress/screenshots
+/playwright-report/
+
+# Other temporary files
+*.log
+*.tmp
+__pycache__/
+*.pyc
+
+start.py
