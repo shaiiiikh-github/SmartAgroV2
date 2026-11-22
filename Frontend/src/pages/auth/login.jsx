@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useLocation } from "react-router-dom";
 import { GoogleLogin } from "@react-oauth/google";
+import { FaGithub } from "react-icons/fa";
 import { useAuth } from "../../context/authContext";
 import { API_BASE_URL as apiUrl } from "../../components/api";
 import axios from "axios";
@@ -13,14 +14,16 @@ import { springSmooth } from "../../constants/motion";
 
 export function Login() {
   const { t } = useTranslation();
+  const location = useLocation();
 
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() => location.state?.error || "");
   const [loading, setLoading] = useState(false);
 
   const { isAuthenticated, login, handleOAuthLogin } = useAuth();
   const navigate = useNavigate();
+  const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID;
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -98,20 +101,33 @@ export function Login() {
           </motion.div>
         )}
 
-        {/* Google OAuth Section */}
-        <div className="flex flex-col gap-5 mb-6">
-          <div className="flex justify-center w-full overflow-hidden">
-            <GoogleLogin
-              onSuccess={handleGoogleLogin}
-              onError={() => setError(t("login.errors.google"))}
-              shape="pill"
-              theme="outline"
-              size="large"
-              text="continue_with"
-            />
+        {/* OAuth Section */}
+        <div className="flex flex-col gap-3 mb-6">
+          <div className="flex flex-col items-center gap-2.5 w-full">
+            <div className="flex justify-center w-full overflow-hidden">
+              <GoogleLogin
+                onSuccess={handleGoogleLogin}
+                onError={() => setError(t("login.errors.google"))}
+                shape="pill"
+                theme="outline"
+                size="large"
+                text="continue_with"
+              />
+            </div>
+
+            {GITHUB_CLIENT_ID && (
+              <a
+                href={`https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=user:email`}
+                className="flex items-center justify-center gap-2.5 w-[240px] h-[40px] rounded-full border border-slate-300 dark:border-white/20 bg-white dark:bg-slate-900/80 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold shadow-sm transition-all active:scale-[0.98]"
+                aria-label="Continue with GitHub"
+              >
+                <FaGithub className="text-base shrink-0" />
+                <span>{t("login.continueWithGithub", "Continue with GitHub")}</span>
+              </a>
+            )}
           </div>
 
-          <div className="flex items-center">
+          <div className="flex items-center mt-2">
             <div className="flex-grow border-t border-slate-200/80 dark:border-white/10" />
             <span className="mx-4 text-slate-600 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest shrink-0">
               {t("login.or")}
