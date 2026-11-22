@@ -54,7 +54,7 @@ export function GlassModal({
             transition={{ duration: 0.2 }}
             onClick={onClose}
             aria-hidden="true"
-            className="fixed inset-0 bg-slate-950/45 dark:bg-black/65 backdrop-blur-md transition-opacity"
+            className="fixed inset-0 bg-slate-950/45 dark:bg-black/65 backdrop-blur-sm md:backdrop-blur-md transition-opacity touch-none"
           />
 
           {/* Modal / Bottom Sheet Content */}
@@ -69,7 +69,7 @@ export function GlassModal({
             transition={springSmooth}
             className={`relative z-10 w-full ${maxWidth} glass-strong border border-slate-900/10 dark:border-white/10
                        rounded-t-[32px] md:rounded-[28px] shadow-2xl p-6 md:p-8
-                       max-h-[90dvh] overflow-y-auto pb-safe`}
+                       max-h-[90dvh] overflow-y-auto overscroll-contain pb-safe`}
           >
             {/* Mobile Grab Handle Indicator */}
             <div className="md:hidden flex justify-center pb-3">
