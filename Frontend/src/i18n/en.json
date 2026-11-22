@@ -100,6 +100,7 @@
     "verifying": "Verifying...",
     "noAccount": "Don't have an account?",
     "signup": "Sign Up",
+    "continueWithGithub": "Continue with GitHub",
     "errors": {
       "invalid": "Invalid login credentials",
       "connection": "Connection error. Please try again later.",
@@ -114,6 +115,7 @@
       "location_details": "Location Details"
     },
     "auth": {
+      "signup_with_github": "Sign up with GitHub",
       "or_use_email": "Or use email",
       "already_have_account": "Already have an account?",
       "login_link": "Login"
@@ -141,7 +143,8 @@
         "privacy_policy": "Privacy Policy",
         "and": "and",
         "terms_of_service": "Terms of Service"
-      }
+      },
+      "terms_agreement": "I agree to the Terms of Service & Privacy Policy"
     },
     "buttons": {
       "next_step": "Next Step",
@@ -159,7 +162,10 @@
       "location_required": "Location required",
       "agree_terms": "Please agree to terms",
       "google_signup_failed": "Google signup failed",
-      "signup_failed_generic": "Signup failed. Try again."
+      "signup_failed_generic": "Signup failed. Try again.",
+      "password_min_length": "Password must be at least 8 characters long.",
+      "password_upper": "Password must contain at least one uppercase letter (A-Z).",
+      "password_special": "Password must contain at least one special character (!@#$%^&*)."
     }
   },
   "profile": {
@@ -258,7 +264,6 @@
     "number": "Number",
     "special": "Special Character"
   },
-
   "profile_dropdown": {
     "aria_label": "Open profile menu",
     "view_profile": "View Profile",
@@ -280,6 +285,11 @@
     "solarGeneration": "Solar Generation",
     "kwhPerDay": "kWh/d",
     "cropHealthIndex": "Crop Health Index",
+    "cropHealthCategories": {
+      "good": "Good",
+      "moderate": "Moderate",
+      "poor": "Poor"
+    },
     "activeAlerts": "Active Alerts",
     "priorityItems": "Priority Items",
     "aiFoliageDiagnosis": "AI Foliage Diagnosis",
@@ -343,6 +353,106 @@
       "timeMinsAgo": "24 mins ago",
       "timeHoursAgo": "2 hours ago",
       "timeToday": "Today, 08:30 AM"
+    }
+  },
+  "notFound": {
+    "badge": "Error 404",
+    "title": "Page Not Found",
+    "message": "The agricultural telemetry or insight coordinates you are searching for do not exist or have moved.",
+    "button": "Return to Dashboard / Home"
+  },
+  "footer": {
+    "mission": "Empowering modern agriculture through AI-driven leaf diagnosis, real-time IoT soil telemetry, and clean solar intelligence.",
+    "home": "Home",
+    "about": "About Us",
+    "contact": "Contact",
+    "copyright": "© {{year}} Smart Agro-Solar™. All Rights Reserved."
+  },
+  "insights": {
+    "sample_data": "Sample data",
+    "soil": {
+      "suite": "Telemetry Suite",
+      "nodes_active": "4 Nodes Active",
+      "title": "Soil Moisture & Subsurface Telemetry",
+      "desc": "Real-time volumetric water content, rhizosphere temperature, and chemical alkalinity trends.",
+      "mean_moisture": "Mean Moisture",
+      "optimal_moisture": "Optimal Range (60% - 70%)",
+      "rhizosphere_temp": "Rhizosphere Temp",
+      "root_growth": "Equilibrium for root growth",
+      "alkalinity": "Chemical Alkalinity",
+      "ideal_ph": "Slightly Acidic (Ideal)",
+      "curve_title": "Dynamic Moisture & Temperature Curve",
+      "sensor_array": "Sensor Array #104",
+      "log_records": "Sensor Log Records",
+      "hourly_intervals": "Hourly Intervals",
+      "daily_averages": "Daily Averages",
+      "timestamp": "Timestamp",
+      "moisture": "Moisture",
+      "temperature": "Temperature",
+      "ph": "pH Reading",
+      "status": "Quality Status",
+      "nominal": "Nominal"
+    },
+    "solar": {
+      "microgrid": "Renewable Microgrid",
+      "inverter_connected": "Inverter Connected",
+      "title": "Solar Harvest & Energy Microgrid",
+      "desc": "Photovoltaic output monitoring, MPPT tracking efficiency, and battery reserve storage.",
+      "daily_gen": "Daily Generation",
+      "vs_avg": "+14% vs 7-day average",
+      "efficiency": "Array Efficiency",
+      "mppt_optimal": "MPPT Optimal Curve",
+      "lithium_storage": "Lithium Storage",
+      "curve_title": "Diurnal Solar Generation Curve (Watts vs Time)",
+      "array_type": "Bifacial Monocrystalline Array",
+      "harvest_log": "Hourly Harvest Telemetry",
+      "time_interval": "Time Interval",
+      "power": "Instantaneous Power",
+      "eff_col": "Efficiency",
+      "grid_offset": "Grid Offset",
+      "state": "State",
+      "clean": "100% Clean",
+      "harvesting": "Harvesting"
+    },
+    "crop": {
+      "agronomy": "Agronomy Intelligence",
+      "optimal_vigor": "Optimal Vigor",
+      "title": "Crop Health & Pathology Lifecycle",
+      "desc": "Multi-spectral vegetation index, phenological stage progression, and pathogen probability.",
+      "vigor_score": "Vigor Score",
+      "canopy_dev": "Robust canopy development",
+      "pathology_risk": "Pathology Risk",
+      "blight_prob": "Negligible blight probability",
+      "current_stage": "Current Stage",
+      "days_to_harvest": "Days to harvest: ~24 days",
+      "curve_title": "Vegetation Health vs Disease Probability History",
+      "timeline": "14-Day Timeline",
+      "records": "Foliage Inspection Records",
+      "inspection_date": "Inspection Date",
+      "stage_col": "Phenology Stage",
+      "health_index": "Health Index",
+      "pathology_col": "Pathology Risk",
+      "action": "Action",
+      "recorded": "Recorded"
+    },
+    "system": {
+      "network_telemetry": "Network Telemetry",
+      "mesh_operational": "Mesh Gateway Operational",
+      "title": "System Diagnostics & IoT Node Health",
+      "desc": "Edge gateway latency, sensory node battery status, and automated anomaly notifications.",
+      "latency": "Mesh Latency",
+      "sub_second": "Sub-second telemetry",
+      "nodes_online": "Nodes Online",
+      "coverage": "100% Mesh Coverage",
+      "packet_success": "Packet Success",
+      "zero_dropouts": "Zero dropouts",
+      "active_alerts": "Active Alerts",
+      "attention": "1 Requires Attention",
+      "incident_feed": "Incident & Anomaly Feed",
+      "fleet_status": "Hardware Fleet Status",
+      "run_scan": "Run Complete Diagnostic Scan",
+      "all": "All",
+      "critical": "Critical"
     }
   }
 }
