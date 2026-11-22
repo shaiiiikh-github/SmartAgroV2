@@ -158,6 +158,9 @@ export function AboutUs() {
                   src={person.img}
                   alt={person.name}
                   loading="lazy"
+                  decoding="async"
+                  width={96}
+                  height={96}
                   className="w-24 h-24 rounded-3xl object-cover border-2 border-white/60 dark:border-white/10 shadow-lg"
                 />
               </div>
