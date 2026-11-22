@@ -86,7 +86,55 @@ html.dark {
   --bg-page: #020617;
 }
 
+/* 🔹 MOBILE GLASS PERFORMANCE BUDGET (≤768px and touch devices) */
+@media (max-width: 768px), (hover: none) {
+  :root {
+    --blur-sm: 4px;
+    --blur-md: 8px;
+    --blur-lg: 12px;
+    --blur-xl: 16px;
+    --glass-bg: rgba(255, 255, 255, 0.92);
+    --glass-bg-subtle: rgba(255, 255, 255, 0.86);
+    --glass-bg-strong: rgba(255, 255, 255, 0.98);
+  }
+
+  html.dark {
+    --blur-sm: 4px;
+    --blur-md: 8px;
+    --blur-lg: 12px;
+    --blur-xl: 16px;
+    --glass-bg: rgba(15, 23, 42, 0.88);
+    --glass-bg-subtle: rgba(15, 23, 42, 0.75);
+    --glass-bg-strong: rgba(15, 23, 42, 0.96);
+  }
+
+  /* Eliminate expensive nested backdrop-filters on mobile */
+  .glass .glass-subtle,
+  .glass-card .glass-subtle,
+  .glass-strong .glass-subtle,
+  .glass .glass-pill,
+  .glass-card .glass-pill,
+  .glass-card .glass-button-secondary,
+  .glass-strong .glass-button-secondary {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  /* Disable sticky hover transforms on touch screens */
+  .glass-card:hover {
+    transform: none !important;
+    box-shadow: 0 1px 0 0 var(--glass-highlight) inset, var(--glass-shadow) !important;
+  }
+}
+
 /* 🔹 BASE STYLES & TYPOGRAPHY */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+button, a, input, select, textarea {
+  touch-action: manipulation;
+}
 html {
   scroll-behavior: smooth;
   -webkit-text-size-adjust: 100%;
@@ -373,6 +421,13 @@ html.dark .glass-input {
 
 .aurora-blob-4 {
   animation: auroraDrift4 28s ease-in-out infinite alternate;
+}
+
+/* 🔹 PAUSE ANIMATIONS WHEN TAB IS HIDDEN */
+.tab-hidden .aurora-blob,
+.tab-hidden .animate-laser-scan,
+.tab-hidden [class*="aurora-blob"] {
+  animation-play-state: paused !important;
 }
 
 /* 🔹 ACCESSIBILITY: REDUCED MOTION */
