@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "../context/authContext";
 import { motion } from "framer-motion";
 import api from "../components/api";
@@ -28,14 +28,29 @@ export function Profile() {
   const [editMode, setEditMode] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
 
+  const safeVal = (v) => (!v || v === "null" ? "" : String(v));
+
   const [formData, setFormData] = useState({
-    fullName: user?.fullName || "",
-    phone: user?.phone || "",
-    state: user?.state || "",
-    district: user?.district || "",
-    village: user?.village || "",
-    email: user?.email || "",
+    fullName: safeVal(user?.fullName),
+    phone: safeVal(user?.phone),
+    state: safeVal(user?.state),
+    district: safeVal(user?.district),
+    village: safeVal(user?.village),
+    email: safeVal(user?.email),
   });
+
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        fullName: safeVal(user.fullName),
+        phone: safeVal(user.phone),
+        state: safeVal(user.state),
+        district: safeVal(user.district),
+        village: safeVal(user.village),
+        email: safeVal(user.email),
+      });
+    }
+  }, [user]);
 
   const [passwordData, setPasswordData] = useState({
     oldPassword: "",
@@ -156,7 +171,7 @@ export function Profile() {
                   className="w-full h-full object-cover"
                 />
               ) : (
-                (user?.fullName || user?.username || "U").charAt(0).toUpperCase()
+                ((user?.fullName && user.fullName !== "null") ? user.fullName : (user?.username || "U")).charAt(0).toUpperCase()
               )}
             </div>
 
@@ -173,7 +188,7 @@ export function Profile() {
           <div className="text-center sm:text-left flex-1 min-w-0">
             <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 mb-1">
               <h2 className="text-2xl sm:text-3xl font-black text-slate-950 dark:text-slate-50 tracking-tight truncate">
-                {user.fullName || user.username}
+                {(user.fullName && user.fullName !== "null") ? user.fullName : user.username}
               </h2>
               <StatusBadge status="online" size="sm" label="Active Farmer" />
             </div>
@@ -367,6 +382,7 @@ export function Profile() {
 }
 
 function ProfileField({ Icon, label, name, value, editMode, onChange }) {
+  const displayVal = (!value || value === "null") ? "—" : value;
   return (
     <div className="glass-subtle p-4 rounded-2xl border border-slate-900/10 dark:border-white/10 flex items-center justify-between gap-3">
       <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -379,13 +395,13 @@ function ProfileField({ Icon, label, name, value, editMode, onChange }) {
             <input
               type="text"
               name={name}
-              value={value || ""}
+              value={value && value !== "null" ? value : ""}
               onChange={onChange}
               className="glass-input mt-1 py-1.5 text-sm"
             />
           ) : (
             <p className="text-sm font-bold text-slate-950 dark:text-slate-50 truncate mt-0.5">
-              {value || "—"}
+              {displayVal}
             </p>
           )}
         </div>
@@ -395,6 +411,7 @@ function ProfileField({ Icon, label, name, value, editMode, onChange }) {
 }
 
 function StaticField({ Icon, label, value }) {
+  const displayVal = (!value || value === "null") ? "—" : value;
   return (
     <div className="glass-subtle p-4 rounded-2xl border border-slate-900/10 dark:border-white/10 flex items-center gap-3">
       <div className="w-10 h-10 rounded-xl glass flex items-center justify-center text-slate-700 dark:text-slate-400 shrink-0">
@@ -403,7 +420,7 @@ function StaticField({ Icon, label, value }) {
       <div className="flex-1 min-w-0">
         <p className="text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-400">{label}</p>
         <p className="text-sm font-bold text-slate-900 dark:text-slate-200 truncate mt-0.5">
-          {value || "—"}
+          {displayVal}
         </p>
       </div>
     </div>
