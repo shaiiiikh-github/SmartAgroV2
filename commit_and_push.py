@@ -16,48 +16,16 @@ import time
 # List of granular commits: (list_of_files, commit_message)
 COMMITS = [
     (
-        ["scripts/check_duplicates.py"],
-        "feat(db): add read-only pre-flight duplicate and index checker script",
+        [
+            "Frontend/src/i18n/en.json",
+            "Frontend/src/i18n/gu.json",
+            "Frontend/src/i18n/hi.json",
+        ],
+        "i18n(dashboard): add camera capture and device upload translation keys for EN, HI, GU",
     ),
     (
-        ["scripts/migrate_lowercase_emails.py"],
-        "feat(db): add lowercase email normalization migration script",
-    ),
-    (
-        ["Backend/requirements.txt"],
-        "deps(backend): add cloudinary SDK for persistent cloud asset storage",
-    ),
-    (
-        ["Backend/.env.example"],
-        "docs(env): document Cloudinary configuration variables in .env.example",
-    ),
-    (
-        ["Frontend/src/context/authContext.jsx"],
-        "security(auth): remove plaintext user PII from localStorage and derive state in memory",
-    ),
-    (
-        ["Frontend/src/pages/auth/Signup.jsx"],
-        "security(signup): eliminate user profile storage in client localStorage",
-    ),
-    (
-        ["Frontend/src/pages/Profile.jsx"],
-        "fix(profile): safely render null and empty profile values without displaying literal null",
-    ),
-    (
-        ["Frontend/src/pages/insights/CropInsights.jsx"],
-        "feat(insights): connect foliage inspection records to live leaf scans API with fallback",
-    ),
-    (
-        ["Backend/app1.py"],
-        "feat(backend): implement unique indexes, hash reset tokens, and integrate Cloudinary storage",
-    ),
-    (
-        [".gitignore"],
-        "chore(git): ignore temporary test scratch directory",
-    ),
-    (
-        ["DATA_AUDIT.md"],
-        "docs(audit): add comprehensive storage audit report, schema recommendations, and fix log",
+        ["Frontend/src/pages/Dashboard.jsx"],
+        "feat(dashboard): add dual upload and camera capture options for leaf diagnosis",
     ),
     (
         ["commit_and_push.py", "commit_and_push.ps1"],
@@ -98,73 +66,40 @@ def main():
         print(f"[{idx}/{len(COMMITS)}] Committing: {message}")
 
         # Stage files
-        stage_cmd = ["git", "add"] + files
-        run_command(stage_cmd, check=False)
+        for f in files:
+            add_res = run_command(["git", "add", f])
+            if add_res.returncode != 0:
+                print(f"    ⚠️ Warning: could not add {f}")
 
-        # Check if there are staged changes
-        diff_res = subprocess.run(
-            ["git", "diff", "--cached", "--quiet"], capture_output=True
-        )
+        # Check if anything is staged
+        diff_res = subprocess.run(["git", "diff", "--cached", "--quiet"])
         if diff_res.returncode == 0:
-            print("  ℹ️ No changes to commit for this step, skipping...\n")
+            print("  ℹ️ No changes staged for this commit, skipping...")
             continue
 
         # Commit
-        commit_res = run_command(["git", "commit", "-m", message], check=True)
+        commit_res = run_command(["git", "commit", "-m", message])
         if commit_res.returncode != 0:
-            print("  ⚠️ Commit failed, continuing...\n")
+            print(f"    ❌ Commit failed for: {message}")
             continue
 
         successful_commits += 1
+        print("    ✅ Committed successfully.")
 
         # Push immediately if requested
         if push_each:
-            print(f"  ⬆️ Pushing commit to origin/{branch}...")
-            push_res = run_command(["git", "push", "origin", branch], check=False)
-            if push_res.returncode != 0:
-                print(f"  ⚠️ Push notice: {push_res.stderr.strip() or push_res.stdout.strip()}")
-                print("  (If offline or authentication is needed, commits are saved locally)")
+            print(f"    ⬆️ Pushing commit {idx} to origin/{branch}...")
+            push_res = run_command(["git", "push", "origin", branch])
+            if push_res.returncode == 0:
+                print("    ✅ Pushed successfully.")
             else:
-                print("  ✅ Pushed successfully!")
-
-            # Small 1-second pause for distinct timestamps on GitHub
+                print(f"    ❌ Push failed: {push_res.stderr.strip()}")
             time.sleep(1)
 
         print()
 
-    # Catch-all: check if any untracked or modified files remain
-    status_res = subprocess.run(
-        ["git", "status", "--porcelain"], capture_output=True, text=True
-    )
-    remaining = [
-        line.strip()
-        for line in status_res.stdout.splitlines()
-        if not line.strip().endswith("commit_and_push.py")
-        and not line.strip().endswith("commit_and_push.ps1")
-    ]
-
-    if remaining:
-        print("🔍 Staging remaining files...")
-        run_command(["git", "add", "."], check=False)
-        diff_check = subprocess.run(
-            ["git", "diff", "--cached", "--quiet"], capture_output=True
-        )
-        if diff_check.returncode != 0:
-            run_command(
-                [
-                    "git",
-                    "commit",
-                    "-m",
-                    "chore: wrap up remaining project updates and configuration",
-                ],
-                check=True,
-            )
-            successful_commits += 1
-            if push_each:
-                run_command(["git", "push", "origin", branch], check=False)
-
     print("==================================================")
-    print(f"🎉 Done! Successfully created {successful_commits} commits.")
+    print(f"🎉 Process Complete: {successful_commits} commits processed.")
     print("==================================================")
 
 
