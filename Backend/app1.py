@@ -24,7 +24,7 @@ from google.oauth2 import id_token as google_id_token
 from google.auth.transport import requests as google_requests
 from flask_bcrypt import Bcrypt
 from werkzeug.utils import secure_filename
-from PIL import Image
+from PIL import Image, UnidentifiedImageError
 import numpy as np
 import io
 import joblib
@@ -102,6 +102,20 @@ def handle_sensor_data(data):
     latest_pi_data['moisture'] = data.get('moisture', 0)
     print(f"📊 Live Values: {latest_pi_data}")
 
+    if sensor_collection is not None:
+        try:
+            sensor_collection.insert_one({
+                "timestamp": datetime.utcnow(),
+                "temperature": latest_pi_data['temperature'],
+                "humidity": latest_pi_data['humidity'],
+                "moisture": latest_pi_data['moisture'],
+                "solar_output": latest_pi_data.get('solar_output', 0),
+                "solar_efficiency": latest_pi_data.get('solar_efficiency', 0),
+                "crop_health": latest_pi_data.get('crop_health', 85)
+            })
+        except Exception as err:
+            print(f"MongoDB sensor logging error: {err}")
+
     try:
         filename = "sensor_readings.xlsx"
         full_path = os.path.abspath(filename)
@@ -154,6 +168,7 @@ client = None
 db = None
 users_collection = None
 messages_collection = None
+sensor_collection = None
 
 try:
     client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
@@ -162,6 +177,7 @@ try:
     db = client["smart_agro"]
     users_collection = db["users"]
     messages_collection = db["messages"]
+    sensor_collection = db["sensor_readings"]
     print("✅ Connected to MongoDB successfully!")
 except Exception as e:
     print(f"⚠️ Warning: MongoDB connection failed ({e}). Database features will be unavailable.")
@@ -1209,7 +1225,14 @@ def detect_leaf_disease():
 
         # 3. Read image in memory & preprocess with multi-view TTA
         image_bytes = file.read()
-        processed_batch = preprocess_leaf_image(image_bytes, use_tta=True)
+        if not image_bytes:
+            return jsonify({'error': 'Image file is empty'}), 400
+
+        try:
+            processed_batch = preprocess_leaf_image(image_bytes, use_tta=True)
+        except (UnidentifiedImageError, OSError, ValueError, SyntaxError) as img_err:
+            print(f"Invalid leaf image rejected: {img_err}")
+            return jsonify({'error': 'Invalid or corrupted image file. Please upload a valid JPG or PNG image.'}), 400
 
         # 4. Predict across TTA views
         batch_probs = leaf_model.predict(processed_batch, verbose=0)
@@ -1322,40 +1345,6 @@ def analyze_data():
         print("🔥 Data analysis error:")
         traceback.print_exc()
         return jsonify({"message": f"Error: {str(e)}"}), 500
-
-
-@app.route("/api/analyze-datas", methods=["GET"])
-def analyze_datas():
-    try:
-        soil = float(latest_pi_data['moisture'])
-        temp = float(latest_pi_data['temperature'])
-        humidity = float(latest_pi_data['humidity'])
-        irradiance = float(latest_pi_data['irradiance'])
-        light = float(latest_pi_data['light'])
-
-        ml = get_ml_models()
-        if ml["irr"] is None or ml["solar"] is None or ml["crop"] is None:
-            return jsonify({"message": "Prediction models not loaded"}), 503
-
-        irrigate = ml["irr"].predict([[soil, temp, humidity]])[0]
-        energy = ml["solar"].predict([[irradiance, light, humidity, temp]])[0]
-        crop_score = ml["crop"].predict([[soil, temp, humidity, light]])[0]
-        crop_health = ml["encoder"].inverse_transform([int(round(crop_score))])[0]
-
-        return jsonify({
-            "soil": soil,
-            "temperature": temp,
-            "humidity": humidity,
-            "irradiance": irradiance,
-            "light": light,
-            "irrigation": "Yes" if irrigate == 1 else "No",
-            "solar_output": round(energy, 2),
-            "crop_health": crop_health
-        }), 200
-
-    except Exception as e:
-        print("Error in /api/analyze-datas:", e)
-        return jsonify({"error": str(e)}), 500
 
 def check_password(plain_password, hashed_password):
     return bcrypt.check_password_hash(hashed_password, plain_password)
@@ -1819,6 +1808,99 @@ def contact():
     except Exception as e:
         print(f"Contact form error: {str(e)}")
         return jsonify({"message": "Server error processing message"}), 500
+
+@app.route("/api/telemetry/history", methods=["GET"])
+def get_telemetry_history():
+    user = get_logged_in_user()
+    if not user:
+        return jsonify({"message": "Unauthorized"}), 401
+
+    time_range = request.args.get("range", "24h")
+    now = datetime.utcnow()
+    if time_range == "7d":
+        cutoff = now - timedelta(days=7)
+    elif time_range == "30d":
+        cutoff = now - timedelta(days=30)
+    else:
+        time_range = "24h"
+        cutoff = now - timedelta(hours=24)
+
+    if sensor_collection is None:
+        return jsonify({
+            "range": time_range,
+            "soil": [],
+            "solar": [],
+            "crop": [],
+            "count": 0,
+            "isSample": True
+        }), 200
+
+    try:
+        readings = list(sensor_collection.find(
+            {"timestamp": {"$gte": cutoff}},
+            {"_id": 0}
+        ).sort("timestamp", 1))
+
+        if not readings:
+            return jsonify({
+                "range": time_range,
+                "soil": [],
+                "solar": [],
+                "crop": [],
+                "count": 0,
+                "isSample": True
+            }), 200
+
+        soil_data = []
+        solar_data = []
+        crop_data = []
+
+        for r in readings:
+            ts = r.get("timestamp")
+            if isinstance(ts, datetime):
+                label_time = ts.strftime("%H:%M") if time_range == "24h" else ts.strftime("%a %d")
+            else:
+                label_time = str(ts)
+
+            soil_data.append({
+                "label": label_time,
+                "moisture": round(float(r.get("moisture", 0)), 1),
+                "temperature": round(float(r.get("temperature", 0)), 1),
+                "pH": round(float(r.get("pH", r.get("ph", 6.8))), 1)
+            })
+
+            solar_data.append({
+                "time": label_time,
+                "output": round(float(r.get("solar_output", r.get("output", 0))), 1),
+                "efficiency": round(float(r.get("solar_efficiency", r.get("efficiency", 0))), 1)
+            })
+
+            crop_data.append({
+                "date": label_time,
+                "health": round(float(r.get("crop_health", r.get("health", 85))), 1),
+                "risk": round(float(r.get("crop_risk", r.get("risk", 12))), 1),
+                "stage": r.get("crop_stage", r.get("stage", "Vegetative"))
+            })
+
+        return jsonify({
+            "range": time_range,
+            "soil": soil_data,
+            "solar": solar_data,
+            "crop": crop_data,
+            "count": len(readings),
+            "isSample": False
+        }), 200
+    except Exception as e:
+        print(f"Error fetching telemetry history: {e}")
+        return jsonify({
+            "range": time_range,
+            "soil": [],
+            "solar": [],
+            "crop": [],
+            "count": 0,
+            "isSample": True,
+            "error": str(e)
+        }), 200
 
 # --- Main Entry Point ---
 if __name__ == "__main__":
