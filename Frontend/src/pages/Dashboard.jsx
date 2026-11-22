@@ -35,6 +35,10 @@ let dashboardCache = {
 
 const CACHE_EXPIRY_MS = 5 * 60 * 1000;
 
+const isHoverCapable =
+  typeof window !== "undefined" && window.matchMedia && window.matchMedia("(hover: hover)").matches;
+const cardHover = isHoverCapable ? { y: -3, transition: springSmooth } : undefined;
+
 export function Dashboard() {
   const { t } = useTranslation();
   const [isLoading, setIsLoading] = useState(true);
@@ -76,9 +80,9 @@ export function Dashboard() {
   const cropHealth = useMemo(
     () => ({
       diseaseRisk: analysisResult?.diseaseRisk || apiData?.diseaseRisk || 0,
-      growthStage: analysisResult?.growthStage || apiData?.growthStage || t("dashboard.growthStageValue"),
+      growthStage: (typeof analysisResult?.growthStage === "string" ? analysisResult.growthStage : null) || apiData?.growthStage || t("dashboard.growthStageValue"),
       lastScan: analysisResult ? t("dashboard.alerts.timeMinsAgo") : t("dashboard.alerts.timeToday"),
-      healthScore: analysisResult?.healthScore || apiData?.crop_health || 0,
+      healthScore: (typeof analysisResult?.healthScore === "number" ? analysisResult.healthScore : null) ?? apiData?.crop_health ?? 0,
     }),
     [apiData, analysisResult, t]
   );
@@ -224,7 +228,10 @@ export function Dashboard() {
         body: formData,
       });
 
-      if (!response.ok) throw new Error("Analysis failed");
+      if (!response.ok) {
+        const errJson = await response.json().catch(() => null);
+        throw new Error(errJson?.error || errJson?.message || "Analysis failed");
+      }
 
       const result = await response.json();
       setAnalysisResult(result);
@@ -233,8 +240,8 @@ export function Dashboard() {
       const updatedData = {
         ...apiData,
         diseaseRisk: result.diseaseRisk,
-        growthStage: result.growthStage,
-        crop_health: result.healthScore,
+        ...(typeof result.growthStage === "string" ? { growthStage: result.growthStage } : {}),
+        ...(typeof result.healthScore === "number" ? { crop_health: result.healthScore } : {}),
         predictedClass: result.prediction,
         confidence: result.confidence,
       };
@@ -248,7 +255,7 @@ export function Dashboard() {
       console.error("Error analyzing image:", error);
       setAnalysisResult({
         error: true,
-        message: "Analysis failed. Please try again.",
+        message: error.message || "Analysis failed. Please try again.",
       });
     } finally {
       setIsUploading(false);
@@ -361,7 +368,7 @@ export function Dashboard() {
         {/* Soil Moisture Card */}
         <Link to="/insights/soil" className="group">
           <motion.div
-            whileHover={{ y: -3, transition: springSmooth }}
+            whileHover={cardHover}
             className="glass-card p-5 rounded-3xl h-full flex flex-col justify-between"
             data-aos="fade-up"
             data-aos-delay="100"
@@ -391,7 +398,7 @@ export function Dashboard() {
         {/* Solar Output Card */}
         <Link to="/insights/solar" className="group">
           <motion.div
-            whileHover={{ y: -3, transition: springSmooth }}
+            whileHover={cardHover}
             className="glass-card p-5 rounded-3xl h-full flex flex-col justify-between"
             data-aos="fade-up"
             data-aos-delay="200"
@@ -421,7 +428,7 @@ export function Dashboard() {
         {/* Crop Health Card */}
         <Link to="/insights/crop" className="group">
           <motion.div
-            whileHover={{ y: -3, transition: springSmooth }}
+            whileHover={cardHover}
             className="glass-card p-5 rounded-3xl h-full flex flex-col justify-between"
             data-aos="fade-up"
             data-aos-delay="300"
@@ -439,10 +446,18 @@ export function Dashboard() {
                 {t("dashboard.cropHealthIndex")}
               </p>
               <div className="flex items-baseline gap-2 mt-0.5">
-                <span className="text-3xl font-black text-slate-950 dark:text-slate-50">
-                  {cropHealth.healthScore}
-                </span>
-                <span className="text-xs text-slate-700 dark:text-slate-300 font-bold">/ 100</span>
+                {typeof cropHealth.healthScore === "number" ? (
+                  <>
+                    <span className="text-3xl font-black text-slate-950 dark:text-slate-50">
+                      {cropHealth.healthScore}
+                    </span>
+                    <span className="text-xs text-slate-700 dark:text-slate-300 font-bold">/ 100</span>
+                  </>
+                ) : (
+                  <span className="text-2xl font-black text-slate-950 dark:text-slate-50">
+                    {t(`dashboard.cropHealthCategories.${String(cropHealth.healthScore).toLowerCase()}`, { defaultValue: String(cropHealth.healthScore) })}
+                  </span>
+                )}
               </div>
             </div>
           </motion.div>
@@ -451,7 +466,7 @@ export function Dashboard() {
         {/* Active Alerts Card */}
         <Link to="/insights/system" className="group">
           <motion.div
-            whileHover={{ y: -3, transition: springSmooth }}
+            whileHover={cardHover}
             className="glass-card p-5 rounded-3xl h-full flex flex-col justify-between"
             data-aos="fade-up"
             data-aos-delay="400"
@@ -539,6 +554,12 @@ export function Dashboard() {
                     onChange={handleImageChange}
                   />
                 </label>
+              </div>
+            )}
+
+            {analysisResult?.error && (
+              <div className="mb-4 p-3 rounded-2xl bg-red-500/10 border border-red-500/25 text-red-700 dark:text-red-400 text-xs font-semibold text-center">
+                {analysisResult.message}
               </div>
             )}
           </div>
