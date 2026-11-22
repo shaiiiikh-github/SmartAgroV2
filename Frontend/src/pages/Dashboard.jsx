@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { useTranslation } from "react-i18next";
 import {
@@ -49,6 +49,10 @@ export function Dashboard() {
   const [apiData, setApiData] = useState(dashboardCache.data);
   const [isFetching, setIsFetching] = useState(false);
   const [activeTab, setActiveTab] = useState("overview"); // "overview" | "treatment" | "prevention"
+
+  // Refs for the two hidden file inputs
+  const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
 
   useEffect(() => {
     const savedAnalysis = sessionStorage.getItem("lastLeafAnalysis");
@@ -212,6 +216,17 @@ export function Dashboard() {
       }
     }
   };
+
+  const handleCameraCapture = useCallback((e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (previewImage) URL.revokeObjectURL(previewImage);
+    setSelectedImage(file);
+    setPreviewImage(URL.createObjectURL(file));
+    setAnalysisResult(null);
+    // Reset the camera input so the same photo can be retaken
+    if (cameraInputRef.current) cameraInputRef.current.value = "";
+  }, [previewImage]);
 
   const uploadImage = async () => {
     if (!selectedImage) return;
@@ -534,26 +549,48 @@ export function Dashboard() {
             ) : (
               <div className="border-2 border-dashed border-emerald-600/30 dark:border-emerald-500/30 rounded-2xl p-6 text-center mb-4 glass-subtle transition-colors hover:border-emerald-600">
                 <div className="w-12 h-12 rounded-full glass mx-auto flex items-center justify-center text-emerald-700 dark:text-emerald-400 text-xl mb-3 shadow-inner">
-                  <FiUpload />
+                  <FiImage />
                 </div>
                 <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
                   {t("dashboard.dropLeaf")}
                 </p>
-                <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 mb-4 font-medium">
+                <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 mb-5 font-medium">
                   {t("dashboard.orPaste")}
                 </p>
 
-                <label className="cursor-pointer">
-                  <span className="glass-button glass-button-primary text-xs px-4 py-2">
-                    {t("dashboard.browseSpecimen")}
-                  </span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={handleImageChange}
-                  />
-                </label>
+                {/* Two-button row: Upload + Take Photo */}
+                <div className="flex items-center justify-center gap-3 flex-wrap">
+                  {/* Upload from device */}
+                  <label className="cursor-pointer">
+                    <span className="glass-button glass-button-secondary text-xs px-4 py-2 inline-flex items-center gap-1.5">
+                      <FiUpload className="text-sm" />
+                      {t("dashboard.uploadPhoto")}
+                    </span>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={handleImageChange}
+                    />
+                  </label>
+
+                  {/* Take photo with camera */}
+                  <label className="cursor-pointer">
+                    <span className="glass-button glass-button-primary text-xs px-4 py-2 inline-flex items-center gap-1.5">
+                      <FiCamera className="text-sm" />
+                      {t("dashboard.takePhoto")}
+                    </span>
+                    <input
+                      ref={cameraInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handleCameraCapture}
+                    />
+                  </label>
+                </div>
               </div>
             )}
 
