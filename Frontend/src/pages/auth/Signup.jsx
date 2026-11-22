@@ -206,7 +206,6 @@ export function Signup() {
         localStorage.setItem("smart_agro_token", res.data.token);
       }
       if (res.data?.user) {
-        localStorage.setItem("smart_agro_user", JSON.stringify(res.data.user));
         setUser(res.data.user);
         setIsAuthenticated(true);
         navigate("/dashboard");
