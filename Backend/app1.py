@@ -8,9 +8,10 @@ os.environ["TF_NUM_INTEROP_THREADS"] = "1"
 
 # --- Imports ---
 from flask_socketio import SocketIO, emit
-from flask import Flask, request, jsonify, session
+from flask import Flask, request, jsonify, session, Response
 from flask_cors import CORS
 from pymongo import MongoClient
+from pymongo.errors import DuplicateKeyError
 from dotenv import load_dotenv
 import smtplib
 from email.mime.text import MIMEText
@@ -18,6 +19,7 @@ from email.mime.multipart import MIMEMultipart
 from bson import ObjectId
 import requests
 import secrets
+import hashlib
 from datetime import datetime, timedelta
 import jwt
 from google.oauth2 import id_token as google_id_token
@@ -33,6 +35,30 @@ import random
 import traceback
 import re
 from flask import send_from_directory
+
+try:
+    import cloudinary
+    import cloudinary.uploader
+    CLOUDINARY_AVAILABLE = True
+except ImportError:
+    CLOUDINARY_AVAILABLE = False
+
+def get_cloudinary_config():
+    """Configures and validates Cloudinary if credentials are present in env."""
+    if not CLOUDINARY_AVAILABLE:
+        return False
+    c_name = os.getenv("CLOUDINARY_CLOUD_NAME", "").strip()
+    c_key = os.getenv("CLOUDINARY_API_KEY", "").strip()
+    c_sec = os.getenv("CLOUDINARY_API_SECRET", "").strip()
+    if c_name and c_key and c_sec:
+        cloudinary.config(
+            cloud_name=c_name,
+            api_key=c_key,
+            api_secret=c_sec,
+            secure=True
+        )
+        return True
+    return False
 
 # --- App Initialization and Configuration ---
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -116,33 +142,6 @@ def handle_sensor_data(data):
         except Exception as err:
             print(f"MongoDB sensor logging error: {err}")
 
-    try:
-        filename = "sensor_readings.xlsx"
-        full_path = os.path.abspath(filename)
-
-        new_row = {
-            "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "Temperature": latest_pi_data['temperature'],
-            "Humidity": latest_pi_data['humidity'],
-            "Moisture": latest_pi_data['moisture']
-        }
-        new_df = pd.DataFrame([new_row])
-
-        if os.path.exists(full_path):
-            print(f"📂 Found existing file at: {full_path}")
-            existing_df = pd.read_excel(full_path)
-            updated_df = pd.concat([existing_df, new_df], ignore_index=True)
-            updated_df.to_excel(full_path, index=False)
-        else:
-            print(f"🆕 Creating NEW file at: {full_path}")
-            new_df.to_excel(full_path, index=False)
-
-        print("✅ Excel Updated Successfully!")
-
-    except Exception as e:
-        print(f"❌ CRITICAL EXCEL ERROR: {str(e)}")
-        if "openpyxl" in str(e):
-            print("💡 FIX: Stop server and run 'pip install openpyxl'")
     print("------------------------------------------------")
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -162,13 +161,69 @@ os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 app.config['MAX_CONTENT_LENGTH'] = 5 * 1024 * 1024
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
-# --- Database Setup ---
+# --- Database Setup & Index Management ---
+def ensure_indexes():
+    """
+    Ensures essential performance, uniqueness, and TTL indexes exist on MongoDB collections.
+    Called once at startup inside try/except. Fails gracefully with a warning.
+    """
+    if db is None or users_collection is None:
+        return
+
+    try:
+        # 1. users: unique lowercase email
+        users_collection.create_index("email", unique=True)
+        # 2. users: unique username
+        users_collection.create_index("username", unique=True)
+        # 3. users: sparse index on reset_token_hash
+        users_collection.create_index("reset_token_hash", sparse=True)
+        print("✅ Users core unique indexes (email, username, reset_token_hash) ensured.")
+    except Exception as idx_err:
+        print(f"⚠️ Warning: Could not ensure core users indexes: {idx_err}")
+
+    try:
+        # 4. users: partial unique index on phone (only non-empty strings; ignores null and "")
+        users_collection.create_index(
+            "phone",
+            unique=True,
+            partialFilterExpression={"phone": {"$gt": ""}}
+        )
+        print("✅ Users partial unique phone index ensured.")
+    except Exception as idx_err:
+        print(f"⚠️ Warning: Could not ensure unique phone index: {idx_err}")
+
+    try:
+        # 5. sensor_readings: ONE TTL index on timestamp (90 days = 7,776,000 seconds)
+        if sensor_collection is not None:
+            sensor_collection.create_index("timestamp", expireAfterSeconds=7776000)
+            print("✅ Sensor readings TTL index ensured.")
+    except Exception as idx_err:
+        print(f"⚠️ Warning: Could not ensure TTL index on sensor_readings: {idx_err}")
+
+    try:
+        # 6. messages: descending index on createdAt
+        if messages_collection is not None:
+            messages_collection.create_index([("createdAt", -1)])
+            print("✅ Messages collection index ensured.")
+    except Exception as idx_err:
+        print(f"⚠️ Warning: Could not ensure index on messages collection: {idx_err}")
+
+    try:
+        # 7. leaf_scans: query index on (userId, createdAt desc) and imageHash
+        if leaf_scans_collection is not None:
+            leaf_scans_collection.create_index([("userId", 1), ("createdAt", -1)])
+            leaf_scans_collection.create_index("imageHash")
+            print("✅ Leaf scans collection indexes ensured.")
+    except Exception as idx_err:
+        print(f"⚠️ Warning: Could not ensure index on leaf_scans collection: {idx_err}")
+
 mongo_uri = os.getenv("MONGO_URI", "mongodb://localhost:27017/smart_agro")
 client = None
 db = None
 users_collection = None
 messages_collection = None
 sensor_collection = None
+leaf_scans_collection = None
 
 try:
     client = MongoClient(mongo_uri, serverSelectionTimeoutMS=5000)
@@ -178,7 +233,9 @@ try:
     users_collection = db["users"]
     messages_collection = db["messages"]
     sensor_collection = db["sensor_readings"]
+    leaf_scans_collection = db["leaf_scans"]
     print("✅ Connected to MongoDB successfully!")
+    ensure_indexes()
 except Exception as e:
     print(f"⚠️ Warning: MongoDB connection failed ({e}). Database features will be unavailable.")
 
@@ -1262,7 +1319,52 @@ def detect_leaf_disease():
         # 7. Get recommendation
         rec = get_recommendation(predicted_class)
 
-        return jsonify({
+        # 8. Persist scan history if user is authenticated (Section 6.1)
+        scan_id = None
+        user = get_logged_in_user()
+        if user and leaf_scans_collection is not None:
+            try:
+                image_hash = hashlib.sha256(image_bytes).hexdigest()
+                leaf_image_url = ""
+
+                # Cloudinary image upload (if configured)
+                if get_cloudinary_config():
+                    try:
+                        c_upload = cloudinary.uploader.upload(
+                            io.BytesIO(image_bytes),
+                            folder="smart_agro/leaf_scans",
+                            public_id=f"leaf_{image_hash[:16]}",
+                            resource_type="image",
+                            transformation=[{"quality": "auto", "fetch_format": "auto"}]
+                        )
+                        leaf_image_url = c_upload.get("secure_url", "")
+                    except Exception as c_err:
+                        print(f"⚠️ Cloudinary leaf upload failed: {c_err}")
+
+                scan_doc = {
+                    "userId": user["_id"],
+                    "imageUrl": leaf_image_url,
+                    "imageHash": image_hash,
+                    "prediction": {
+                        "disease": predicted_class,
+                        "confidence": round(float(confidence), 4),
+                        "diseaseRisk": disease_risk,
+                        "isHealthy": is_healthy,
+                        "topPredictions": top_predictions
+                    },
+                    "recommendation": {
+                        "description": rec["description"],
+                        "treatment": rec["treatment"],
+                        "prevention": rec["prevention"]
+                    },
+                    "createdAt": datetime.utcnow()
+                }
+                res = leaf_scans_collection.insert_one(scan_doc)
+                scan_id = str(res.inserted_id)
+            except Exception as scan_err:
+                print(f"⚠️ Warning: Failed to save leaf scan history: {scan_err}")
+
+        response_payload = {
             "prediction": predicted_class,
             "confidence": confidence,
             "diseaseRisk": disease_risk,
@@ -1274,12 +1376,95 @@ def detect_leaf_disease():
                 "treatment": rec["treatment"],
                 "prevention": rec["prevention"]
             }
-        }), 200
+        }
+        if scan_id:
+            response_payload["scanId"] = scan_id
+
+        return jsonify(response_payload), 200
 
     except Exception as e:
         print("Leaf Detection Error:", str(e))
         traceback.print_exc()
         return jsonify({'error': 'Leaf analysis failed'}), 500
+
+@app.route("/api/leaf-scans", methods=["GET"])
+def get_leaf_scans():
+    try:
+        if leaf_scans_collection is None:
+            return jsonify({"message": "Database service unavailable"}), 503
+
+        user = get_logged_in_user()
+        if not user:
+            return jsonify({"message": "Unauthorized"}), 401
+
+        try:
+            page = max(1, int(request.args.get("page", 1)))
+            limit = min(50, max(1, int(request.args.get("limit", 10))))
+        except (ValueError, TypeError):
+            page = 1
+            limit = 10
+
+        skip = (page - 1) * limit
+        user_id = user["_id"]
+
+        total = leaf_scans_collection.count_documents({"userId": user_id}) if hasattr(leaf_scans_collection, "count_documents") else 0
+        cursor = leaf_scans_collection.find({"userId": user_id}).sort("createdAt", -1).skip(skip).limit(limit)
+
+        scans = []
+        for doc in cursor:
+            created_at = doc.get("createdAt")
+            if isinstance(created_at, datetime):
+                created_iso = created_at.isoformat()
+            else:
+                created_iso = str(created_at) if created_at else ""
+
+            scans.append({
+                "id": str(doc["_id"]),
+                "imageUrl": doc.get("imageUrl", ""),
+                "prediction": doc.get("prediction", {}),
+                "recommendation": doc.get("recommendation", {}),
+                "createdAt": created_iso
+            })
+
+        return jsonify({
+            "scans": scans,
+            "total": total,
+            "page": page,
+            "limit": limit
+        }), 200
+
+    except Exception as e:
+        print("Error fetching leaf scans:", str(e))
+        traceback.print_exc()
+        return jsonify({"message": "Server error fetching leaf scans"}), 500
+
+@app.route("/api/leaf-scans/<scan_id>", methods=["DELETE"])
+def delete_leaf_scan(scan_id):
+    try:
+        if leaf_scans_collection is None:
+            return jsonify({"message": "Database service unavailable"}), 503
+
+        user = get_logged_in_user()
+        if not user:
+            return jsonify({"message": "Unauthorized"}), 401
+
+        try:
+            oid = ObjectId(scan_id)
+        except Exception:
+            return jsonify({"message": "Invalid scan ID format"}), 400
+
+        # Owner-only check: scan must belong to the current authenticated user
+        scan = leaf_scans_collection.find_one({"_id": oid, "userId": user["_id"]})
+        if not scan:
+            return jsonify({"message": "Scan not found"}), 404
+
+        leaf_scans_collection.delete_one({"_id": oid})
+        return jsonify({"message": "Scan record deleted successfully"}), 200
+
+    except Exception as e:
+        print("Error deleting leaf scan:", str(e))
+        traceback.print_exc()
+        return jsonify({"message": "Server error deleting leaf scan"}), 500
 
 @app.route("/api/analyze-data", methods=["POST"])
 def analyze_data():
@@ -1349,29 +1534,74 @@ def analyze_data():
 def check_password(plain_password, hashed_password):
     return bcrypt.check_password_hash(hashed_password, plain_password)
 
+def build_user_document(username, email, full_name=None, phone=None, password=None,
+                        state=None, district=None, village=None, provider="local",
+                        profile_image="", google_id=None, github_id=None):
+    """
+    Standardize the user document schema across all registration providers.
+    Ensures consistent defaults (phone: null, state: null, etc.) and timestamps.
+    """
+    now = datetime.utcnow()
+    doc = {
+        "username": username.strip() if isinstance(username, str) else username,
+        "email": email.strip().lower() if isinstance(email, str) else email,
+        "fullName": full_name.strip() if isinstance(full_name, str) and full_name.strip() else username,
+        "phone": phone.strip() if isinstance(phone, str) and phone.strip() else None,
+        "state": state.strip() if isinstance(state, str) and state.strip() else None,
+        "district": district.strip() if isinstance(district, str) and district.strip() else None,
+        "village": village.strip() if isinstance(village, str) and village.strip() else None,
+        "profileImage": profile_image or "",
+        "provider": provider,
+        "createdAt": now,
+        "updatedAt": now,
+    }
+    if password:
+        doc["password"] = password
+    if google_id:
+        doc["googleId"] = google_id
+    if github_id:
+        doc["github_id"] = github_id
+    return doc
+
 # --- User Authentication Routes ---
 @app.route("/api/auth/signup", methods=["POST"])
 def signup():
     try:
-        data = request.get_json()
+        if users_collection is None:
+            return jsonify({"message": "Database service unavailable"}), 503
+
+        data = request.get_json() or {}
         required_fields = ['fullName', 'username', 'phone', 'email', 'password', 'state', 'district', 'village']
         if not all(field in data for field in required_fields):
             return jsonify({"message": "Missing required fields"}), 400
-        if users_collection.find_one({"email": data["email"]}):
+
+        email = data["email"].strip().lower()
+        username = data["username"].strip()
+        phone = data["phone"].strip()
+
+        if users_collection.find_one({"email": email}):
             return jsonify({"message": "Email already exists"}), 409
-        if users_collection.find_one({"username": data["username"]}):
+        if users_collection.find_one({"username": username}):
             return jsonify({"message": "Username already taken"}), 409
+        if phone and users_collection.find_one({"phone": phone}):
+            return jsonify({"message": "Phone number already registered"}), 409
+
         if not is_strong_password(data["password"]):
             return jsonify({
                 "message": "Password does not meet security requirements"
             }), 400
         hashed_password = bcrypt.generate_password_hash(data["password"]).decode("utf-8")
-        user = {
-            "fullName": data["fullName"], "username": data["username"],
-            "phone": data["phone"], "email": data["email"], "password": hashed_password,
-            "state": data["state"], "district": data["district"], "village": data["village"],
-            "createdAt": datetime.utcnow(), "provider": "local"
-        }
+        user = build_user_document(
+            username=username,
+            email=email,
+            full_name=data["fullName"],
+            phone=phone,
+            password=hashed_password,
+            state=data["state"],
+            district=data["district"],
+            village=data["village"],
+            provider="local",
+        )
         result = users_collection.insert_one(user)
 
         session['user_id'] = str(result.inserted_id)
@@ -1381,6 +1611,15 @@ def signup():
         user['id'] = str(result.inserted_id)
         token = generate_token(str(result.inserted_id))
         return jsonify({"message": "Signup successful", "user": user, "token": token}), 201
+    except DuplicateKeyError as dke:
+        err_msg = str(dke).lower()
+        if "username" in err_msg:
+            return jsonify({"message": "Username already taken"}), 409
+        elif "email" in err_msg:
+            return jsonify({"message": "Email already exists"}), 409
+        elif "phone" in err_msg:
+            return jsonify({"message": "Phone number already registered"}), 409
+        return jsonify({"message": "An account with these details already exists"}), 409
     except Exception as e:
         print(f"Signup error: {str(e)}")
         return jsonify({"message": "Server error during signup"}), 500
@@ -1388,20 +1627,30 @@ def signup():
 @app.route("/api/auth/login", methods=["POST"])
 def login():
     try:
-        data = request.get_json()
-        username = data.get("username")
+        if users_collection is None:
+            return jsonify({"message": "Database service unavailable"}), 503
+
+        data = request.get_json() or {}
+        identifier = (data.get("username") or "").strip()
         password = data.get("password")
-        if not username or not password:
+        if not identifier or not password:
             return jsonify({"message": "Username and password required"}), 400
-        user = users_collection.find_one({"$or": [{"username": username}, {"email": username}]})
+
+        norm_email = identifier.lower()
+        user = users_collection.find_one({"$or": [{"username": identifier}, {"email": norm_email}]})
         if not user or not check_password(password, user['password']):
             return jsonify({"message": "Invalid credentials"}), 401
+
+        now = datetime.utcnow()
+        users_collection.update_one({"_id": user['_id']}, {"$set": {"last_login": now}})
+
         session['user_id'] = str(user['_id'])
         session.permanent = True
         user_data = {
             "id": str(user['_id']), "username": user['username'], "email": user['email'],
-            "fullName": user['fullName'], "phone": user.get("phone", ""), "state": user.get('state'),
-            "district": user.get('district'), "village": user.get('village'),
+            "fullName": user.get('fullName') or user['username'],
+            "phone": user.get("phone") or "", "state": user.get('state') or "",
+            "district": user.get('district') or "", "village": user.get('village') or "",
             "profileImage": user.get("profileImage", "")
         }
         token = generate_token(str(user['_id']))
@@ -1413,17 +1662,18 @@ def login():
 @app.route("/api/auth/forgot-password", methods=["POST"])
 def forgot_password():
     try:
-        data = request.get_json()
-        identifier = data.get("identifier")
+        if users_collection is None:
+            return jsonify({"message": "Database service unavailable"}), 503
+
+        data = request.get_json() or {}
+        identifier = (data.get("identifier") or "").strip()
 
         if not identifier:
             return jsonify({"message": "Identifier required"}), 400
 
-        if users_collection is None:
-            return jsonify({"message": "Database service unavailable"}), 503
-
+        norm_email = identifier.lower()
         user = users_collection.find_one({
-            "$or": [{"email": identifier}, {"username": identifier}]
+            "$or": [{"email": norm_email}, {"username": identifier}]
         })
 
         if not user:
@@ -1432,18 +1682,24 @@ def forgot_password():
         if user.get("googleId") or user.get("github_id"):
             return jsonify({"message": "Password reset not available for OAuth accounts"}), 200
 
-        token = secrets.token_urlsafe(32)
+        raw_token = secrets.token_urlsafe(32)
+        token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
         expiry = datetime.utcnow() + timedelta(minutes=30)
 
         users_collection.update_one(
             {"_id": user["_id"]},
             {"$set": {
-                "resetPasswordToken": token,
-                "resetPasswordExpires": expiry
+                "reset_token_hash": token_hash,
+                "reset_token_expiry": expiry
+            },
+            "$unset": {
+                "resetPasswordToken": "",
+                "resetPasswordExpires": "",
+                "reset_token": ""
             }}
         )
 
-        reset_link = f"{FRONTEND_URL}/reset-password?token={token}"
+        reset_link = f"{FRONTEND_URL}/reset-password?token={raw_token}"
         send_reset_email(user["email"], reset_link)
 
         return jsonify({
@@ -1457,30 +1713,43 @@ def forgot_password():
 @app.route("/api/auth/reset-password", methods=["POST"])
 def reset_password():
     try:
-        data = request.get_json()
-        token = data.get("token")
-        new_password = data.get("password")
-
-        if not token or not new_password:
-            return jsonify({"message": "Invalid request"}), 400
-
         if users_collection is None:
             return jsonify({"message": "Database service unavailable"}), 503
 
+        data = request.get_json() or {}
+        raw_token = data.get("token")
+        new_password = data.get("password")
+
+        if not raw_token or not new_password:
+            return jsonify({"message": "Invalid request"}), 400
+
+        token_hash = hashlib.sha256(raw_token.encode('utf-8')).hexdigest()
+
         user = users_collection.find_one({
-            "resetPasswordToken": token,
-            "resetPasswordExpires": {"$gt": datetime.utcnow()}
+            "reset_token_hash": token_hash,
+            "reset_token_expiry": {"$gt": datetime.utcnow()}
         })
 
         if not user:
             return jsonify({"message": "Reset link invalid or expired"}), 400
+
+        if not is_strong_password(new_password):
+            return jsonify({
+                "message": "Password does not meet security requirements"
+            }), 400
 
         hashed_password = bcrypt.generate_password_hash(new_password).decode("utf-8")
 
         users_collection.update_one(
             {"_id": user["_id"]},
             {"$set": {"password": hashed_password},
-             "$unset": {"resetPasswordToken": "", "resetPasswordExpires": ""}}
+             "$unset": {
+                 "reset_token_hash": "",
+                 "reset_token_expiry": "",
+                 "resetPasswordToken": "",
+                 "resetPasswordExpires": "",
+                 "reset_token": ""
+             }}
         )
 
         return jsonify({"message": "Password reset successful"}), 200
@@ -1527,10 +1796,11 @@ def google_oauth():
         if users_collection is None:
             return jsonify({"message": "Database service unavailable"}), 503
 
-        user = users_collection.find_one({"email": decoded['email']})
+        email = decoded['email'].strip().lower()
+        user = users_collection.find_one({"email": email})
 
         if not user:
-            base_username = decoded['email'].split('@')[0]
+            base_username = email.split('@')[0]
             base_username = re.sub(r'[^a-zA-Z0-9_]', '', base_username) or "user"
             username = base_username
             counter = 1
@@ -1538,20 +1808,24 @@ def google_oauth():
                 username = f"{base_username}{counter}"
                 counter += 1
 
-            user = {
-                "email": decoded['email'],
-                "username": username,
-                "fullName": decoded.get('name') or username,
-                "googleId": decoded.get('sub'),
-                "phone": "",
-                "state": "",
-                "district": "",
-                "village": "",
-                "provider": "google",
-                "createdAt": datetime.utcnow()
-            }
-            result = users_collection.insert_one(user)
-            user_id = str(result.inserted_id)
+            user = build_user_document(
+                username=username,
+                email=email,
+                full_name=decoded.get('name') or username,
+                provider="google",
+                google_id=decoded.get('sub')
+            )
+            try:
+                result = users_collection.insert_one(user)
+                user_id = str(result.inserted_id)
+                user["_id"] = result.inserted_id
+            except DuplicateKeyError:
+                # Handle concurrent registration race condition
+                user = users_collection.find_one({"email": email})
+                if user:
+                    user_id = str(user['_id'])
+                else:
+                    return jsonify({"message": "Account collision during OAuth signup"}), 409
         else:
             user_id = str(user['_id'])
             if not user.get("googleId") and decoded.get("sub"):
@@ -1559,6 +1833,9 @@ def google_oauth():
                     {"_id": user["_id"]},
                     {"$set": {"googleId": decoded.get("sub")}}
                 )
+
+        now = datetime.utcnow()
+        users_collection.update_one({"_id": user["_id"]}, {"$set": {"last_login": now}})
 
         session['user_id'] = user_id
         session.permanent = True
@@ -1570,11 +1847,11 @@ def google_oauth():
                 "id": user_id,
                 "username": user.get('username'),
                 "email": user.get('email'),
-                "fullName": user.get('fullName'),
-                "phone": user.get("phone", ""),
-                "state": user.get("state", ""),
-                "district": user.get("district", ""),
-                "village": user.get("village", ""),
+                "fullName": user.get('fullName') or user.get('username'),
+                "phone": user.get("phone") or "",
+                "state": user.get("state") or "",
+                "district": user.get("district") or "",
+                "village": user.get("village") or "",
                 "profileImage": user.get("profileImage", "")
             },
             "token": auth_token
@@ -1620,7 +1897,7 @@ def github_login():
         user_res.raise_for_status()
         user_info = user_res.json()
 
-        email = user_info.get("email") or f"{user_info['id']}@github.com"
+        email = (user_info.get("email") or f"{user_info['id']}@github.com").strip().lower()
         username = user_info["login"]
 
         if users_collection is None:
@@ -1628,19 +1905,36 @@ def github_login():
 
         user = users_collection.find_one({"email": email})
         if not user:
-            user = {
-                "username": username,
-                "email": email,
-                "github_id": user_info["id"],
-                "fullName": user_info.get("name"),
-                "phone": "",
-                "state": "",
-                "district": "",
-                "village": "",
-                "createdAt": datetime.utcnow()
-            }
-            result = users_collection.insert_one(user)
-            user["_id"] = result.inserted_id
+            base_username = re.sub(r'[^a-zA-Z0-9_]', '', username) or "user"
+            gh_username = base_username
+            counter = 1
+            while users_collection.find_one({"username": gh_username}):
+                gh_username = f"{base_username}{counter}"
+                counter += 1
+
+            user = build_user_document(
+                username=gh_username,
+                email=email,
+                full_name=user_info.get("name") or gh_username,
+                provider="github",
+                github_id=user_info.get("id")
+            )
+            try:
+                result = users_collection.insert_one(user)
+                user["_id"] = result.inserted_id
+            except DuplicateKeyError:
+                user = users_collection.find_one({"email": email})
+                if not user:
+                    return jsonify({"message": "Username or email collision during OAuth signup"}), 409
+        else:
+            if not user.get("github_id") and user_info.get("id"):
+                users_collection.update_one(
+                    {"_id": user["_id"]},
+                    {"$set": {"github_id": user_info.get("id")}}
+                )
+
+        now = datetime.utcnow()
+        users_collection.update_one({"_id": user["_id"]}, {"$set": {"last_login": now}})
 
         session["user_id"] = str(user["_id"])
         session.permanent = True
@@ -1652,7 +1946,12 @@ def github_login():
                 "id": str(user["_id"]),
                 "username": user["username"],
                 "email": user["email"],
-                "fullName": user.get("fullName")
+                "fullName": user.get("fullName") or user["username"],
+                "phone": user.get("phone") or "",
+                "state": user.get("state") or "",
+                "district": user.get("district") or "",
+                "village": user.get("village") or "",
+                "profileImage": user.get("profileImage", "")
             },
             "token": auth_token
         }), 200
@@ -1664,6 +1963,8 @@ def github_login():
 @app.route("/api/user/profile", methods=["PUT"])
 def update_profile():
     try:
+        if users_collection is None:
+            return jsonify({"message": "Database service unavailable"}), 503
         user = get_logged_in_user()
         if not user:
             return jsonify({"message": "Unauthorized"}), 401
@@ -1690,6 +1991,7 @@ def update_profile():
         if not update_data:
             return jsonify({"message": "No valid fields to update"}), 400
 
+        update_data["updatedAt"] = datetime.utcnow()
         result = users_collection.update_one(
             {"_id": user_id},
             {"$set": update_data}
@@ -1708,6 +2010,8 @@ def update_profile():
 @app.route("/api/user/profile-image", methods=["PUT"])
 def upload_profile_image():
     try:
+        if users_collection is None:
+            return jsonify({"message": "Database service unavailable"}), 503
         user = get_logged_in_user()
         if not user:
             return jsonify({"message": "Unauthorized"}), 401
@@ -1726,17 +2030,59 @@ def upload_profile_image():
         filename = secure_filename(file.filename)
         ext = filename.rsplit(".", 1)[1].lower()
 
-        new_filename = f"{user['_id']}.{ext}"
+        image_url = None
 
-        save_path = os.path.join(app.config["UPLOAD_FOLDER"], new_filename)
-        file.save(save_path)
+        # 1. Upload to Cloudinary if configured (DATA-05 free cloud tier)
+        if get_cloudinary_config():
+            try:
+                file.seek(0)
+                upload_res = cloudinary.uploader.upload(
+                    file,
+                    folder="smart_agro/avatars",
+                    public_id=f"avatar_{user['_id']}",
+                    overwrite=True,
+                    resource_type="image",
+                    transformation=[
+                        {"width": 400, "height": 400, "crop": "fill", "gravity": "face", "quality": "auto"}
+                    ]
+                )
+                image_url = upload_res.get("secure_url")
+            except Exception as c_err:
+                print(f"⚠️ Cloudinary avatar upload failed ({c_err}); falling back to local storage.")
 
-        backend_base_url = os.getenv("BACKEND_URL", request.host_url.rstrip('/'))
-        image_url = f"{backend_base_url}/uploads/{new_filename}"
+        # 2. Fallback to local disk storage if Cloudinary not available
+        if not image_url:
+            new_filename = f"{user['_id']}.{ext}"
+            upload_folder = app.config["UPLOAD_FOLDER"]
+            save_path = os.path.join(upload_folder, new_filename)
+
+            # DATA-06: Remove previous local avatar from disk if exists
+            old_image = user.get("profileImage")
+            if old_image:
+                try:
+                    old_filename = os.path.basename(old_image)
+                    upload_folder_abs = os.path.abspath(upload_folder)
+                    old_path = os.path.abspath(os.path.join(upload_folder, old_filename))
+                    # Security: ensure old_path resides strictly within upload_folder
+                    if os.path.commonpath([old_path, upload_folder_abs]) == upload_folder_abs:
+                        if os.path.exists(old_path) and os.path.isfile(old_path):
+                            if old_path != os.path.abspath(save_path):
+                                os.remove(old_path)
+                except Exception as del_err:
+                    print(f"Warning: Failed to remove previous avatar: {del_err}")
+
+            file.seek(0)
+            file.save(save_path)
+
+            backend_base_url = os.getenv("BACKEND_URL", request.host_url.rstrip('/'))
+            image_url = f"{backend_base_url}/uploads/{new_filename}"
 
         users_collection.update_one(
             {"_id": user["_id"]},
-            {"$set": {"profileImage": image_url}}
+            {"$set": {
+                "profileImage": image_url,
+                "updatedAt": datetime.utcnow()
+            }}
         )
 
         return jsonify({
@@ -1752,6 +2098,8 @@ def upload_profile_image():
 @app.route("/api/user/change-password", methods=["PUT"])
 def change_password():
     try:
+        if users_collection is None:
+            return jsonify({"message": "Database service unavailable"}), 503
         user = get_logged_in_user()
         if not user:
             return jsonify({"message": "Unauthorized"}), 401
@@ -1808,6 +2156,84 @@ def contact():
     except Exception as e:
         print(f"Contact form error: {str(e)}")
         return jsonify({"message": "Server error processing message"}), 500
+
+@app.route("/api/telemetry/export", methods=["GET"])
+def export_telemetry():
+    """
+    On-demand CSV export of historical telemetry readings from MongoDB.
+    Replaces deprecated synchronous Excel disk writing (DATA-08).
+    Requires authentication.
+    """
+    try:
+        user = get_logged_in_user()
+        if not user:
+            return jsonify({"message": "Unauthorized"}), 401
+
+        if sensor_collection is None:
+            return jsonify({"message": "Database service unavailable"}), 503
+
+        time_range = request.args.get("range", "7d")
+        now = datetime.utcnow()
+        if time_range == "24h":
+            cutoff = now - timedelta(hours=24)
+        elif time_range == "30d":
+            cutoff = now - timedelta(days=30)
+        else:
+            time_range = "7d"
+            cutoff = now - timedelta(days=7)
+
+        try:
+            limit = min(5000, max(1, int(request.args.get("limit", 1000))))
+        except (ValueError, TypeError):
+            limit = 1000
+
+        readings = list(sensor_collection.find(
+            {"timestamp": {"$gte": cutoff}},
+            {"_id": 0}
+        ).sort("timestamp", -1).limit(limit))
+
+        import csv
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerow([
+            "Timestamp (UTC)",
+            "Temperature (C)",
+            "Humidity (%)",
+            "Moisture (%)",
+            "Solar Output (W)",
+            "Solar Efficiency (%)",
+            "Crop Health"
+        ])
+
+        for r in readings:
+            ts = r.get("timestamp")
+            if isinstance(ts, datetime):
+                ts_str = ts.strftime("%Y-%m-%d %H:%M:%S")
+            else:
+                ts_str = str(ts) if ts else ""
+
+            writer.writerow([
+                ts_str,
+                r.get("temperature", ""),
+                r.get("humidity", ""),
+                r.get("moisture", ""),
+                r.get("solar_output", ""),
+                r.get("solar_efficiency", ""),
+                r.get("crop_health", "")
+            ])
+
+        csv_content = output.getvalue()
+        output.close()
+
+        response = Response(csv_content, mimetype="text/csv")
+        timestamp_str = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
+        response.headers["Content-Disposition"] = f"attachment; filename=telemetry_export_{timestamp_str}.csv"
+        return response
+
+    except Exception as e:
+        print(f"Error exporting telemetry: {str(e)}")
+        traceback.print_exc()
+        return jsonify({"message": "Server error exporting telemetry data"}), 500
 
 @app.route("/api/telemetry/history", methods=["GET"])
 def get_telemetry_history():
