@@ -1,10 +1,13 @@
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { FaCompass, FaHome } from "react-icons/fa";
+import { useTranslation } from "react-i18next";
 import GlassButton from "../components/ui/GlassButton";
 import { springSmooth } from "../constants/motion";
 
 export function NotFound() {
+  const { t } = useTranslation();
+
   return (
     <div className="min-h-[calc(100dvh-120px)] flex items-center justify-center px-4 py-12">
       <motion.div
@@ -21,20 +24,20 @@ export function NotFound() {
         </div>
 
         <span className="glass-pill px-3 py-1 text-xs font-bold uppercase tracking-wider text-emerald-900 dark:text-emerald-300 mb-3 inline-block">
-          Error 404
+          {t("notFound.badge", "Error 404")}
         </span>
 
         <h1 className="text-2xl md:text-3xl font-black text-slate-950 dark:text-slate-50 tracking-tight mt-1 mb-3">
-          Page Not Found
+          {t("notFound.title", "Page Not Found")}
         </h1>
 
         <p className="text-sm md:text-base text-slate-700 dark:text-slate-300 font-medium leading-relaxed mb-8 max-w-sm mx-auto">
-          The agricultural telemetry or insight coordinates you are searching for do not exist or have moved.
+          {t("notFound.message", "The agricultural telemetry or insight coordinates you are searching for do not exist or have moved.")}
         </p>
 
         <Link to="/">
           <GlassButton variant="primary" size="lg" icon={FaHome} className="w-full sm:w-auto">
-            Return to Dashboard / Home
+            {t("notFound.button", "Return to Dashboard / Home")}
           </GlassButton>
         </Link>
       </motion.div>
