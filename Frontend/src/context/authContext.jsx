@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from 'react';
+import { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL as API_BASE } from '../components/api';
@@ -39,7 +39,7 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(() => {
     try {
       // If we already have a cached token, don't show blank loading screen
-      return !Boolean(localStorage.getItem('smart_agro_token'));
+      return !localStorage.getItem('smart_agro_token');
     } catch {
       return true;
     }
@@ -50,7 +50,7 @@ export const AuthProvider = ({ children }) => {
   // =========================
   // Initialize auth state
   // =========================
-  const initializeAuth = async () => {
+  const initializeAuth = useCallback(async () => {
     const token = localStorage.getItem('smart_agro_token');
     try {
       const headers = {};
@@ -87,16 +87,16 @@ export const AuthProvider = ({ children }) => {
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
   useEffect(() => {
     initializeAuth();
-  }, []);
+  }, [initializeAuth]);
 
   // =========================
   // Local login
   // =========================
-  const login = async (credentials) => {
+  const login = useCallback(async (credentials) => {
     try {
       const res = await axios.post(
         `${API_BASE}/api/auth/login`,
@@ -120,12 +120,12 @@ export const AuthProvider = ({ children }) => {
         error: err.response?.data?.message || 'Login failed',
       };
     }
-  };
+  }, []);
 
   // =========================
   // OAuth login (Google/GitHub)
   // =========================
-  const handleOAuthLogin = async (authRequest) => {
+  const handleOAuthLogin = useCallback(async (authRequest) => {
     try {
       const res = await authRequest();
       if (res?.data?.token) {
@@ -142,12 +142,12 @@ export const AuthProvider = ({ children }) => {
       console.error('OAuth login failed:', err);
       return false;
     }
-  };
+  }, []);
 
   // =========================
   // Forgot Password
   // =========================
-  const forgotPassword = async (identifier) => {
+  const forgotPassword = useCallback(async (identifier) => {
     try {
       await axios.post(
         `${API_BASE}/api/auth/forgot-password`,
@@ -158,12 +158,12 @@ export const AuthProvider = ({ children }) => {
     } catch {
       return { success: true };
     }
-  };
+  }, []);
 
   // =========================
   // Reset Password
   // =========================
-  const resetPassword = async ({ token, password }) => {
+  const resetPassword = useCallback(async ({ token, password }) => {
     try {
       await axios.post(
         `${API_BASE}/api/auth/reset-password`,
@@ -180,12 +180,12 @@ export const AuthProvider = ({ children }) => {
           'Reset link is invalid or expired',
       };
     }
-  };
+  }, []);
 
   // =========================
   // Logout
   // =========================
-  const logout = async () => {
+  const logout = useCallback(async () => {
     try {
       const token = localStorage.getItem('smart_agro_token');
       await axios.post(
@@ -205,24 +205,37 @@ export const AuthProvider = ({ children }) => {
       setIsAuthenticated(false);
       navigate('/login');
     }
-  };
+  }, [navigate]);
+
+  const contextValue = useMemo(
+    () => ({
+      user,
+      setUser,
+      isAuthenticated,
+      setIsAuthenticated,
+      loading,
+      login,
+      logout,
+      handleOAuthLogin,
+      initializeAuth,
+      forgotPassword,
+      resetPassword,
+    }),
+    [
+      user,
+      isAuthenticated,
+      loading,
+      login,
+      logout,
+      handleOAuthLogin,
+      initializeAuth,
+      forgotPassword,
+      resetPassword,
+    ]
+  );
 
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        setUser,
-        isAuthenticated,
-        setIsAuthenticated,
-        loading,
-        login,
-        logout,
-        handleOAuthLogin,
-        initializeAuth,
-        forgotPassword,
-        resetPassword,
-      }}
-    >
+    <AuthContext.Provider value={contextValue}>
       {children}
     </AuthContext.Provider>
   );
