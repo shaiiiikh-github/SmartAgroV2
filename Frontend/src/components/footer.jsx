@@ -1,8 +1,10 @@
 import { FaLinkedin, FaGithub, FaInstagram } from "react-icons/fa";
 import { FaXTwitter } from "react-icons/fa6";
 import { Link } from "react-router-dom";
+import { useTranslation } from "react-i18next";
 
 export function Footer() {
+  const { t } = useTranslation();
   const currentYear = new Date().getFullYear();
 
   return (
@@ -19,20 +21,20 @@ export function Footer() {
             </span>
           </div>
           <p className="text-xs text-slate-700 dark:text-slate-300 font-medium max-w-md">
-            Empowering modern agriculture through AI-driven leaf diagnosis, real-time IoT soil telemetry, and clean solar intelligence.
+            {t("footer.mission", "Empowering modern agriculture through AI-driven leaf diagnosis, real-time IoT soil telemetry, and clean solar intelligence.")}
           </p>
         </div>
 
         {/* Quick Nav Links */}
         <div className="flex items-center gap-4 text-xs font-bold text-slate-800 dark:text-slate-200">
           <Link to="/" className="hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors">
-            Home
+            {t("footer.home", "Home")}
           </Link>
           <Link to="/about" className="hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors">
-            About Us
+            {t("footer.about", "About Us")}
           </Link>
           <Link to="/contact" className="hover:text-emerald-700 dark:hover:text-emerald-400 transition-colors">
-            Contact
+            {t("footer.contact", "Contact")}
           </Link>
         </div>
 
@@ -77,7 +79,7 @@ export function Footer() {
             </a>
           </div>
           <span className="text-[11px] text-slate-700 dark:text-slate-400 font-medium">
-            © {currentYear} Smart Agro-Solar™. All Rights Reserved.
+            {t("footer.copyright", "© {{year}} Smart Agro-Solar™. All Rights Reserved.", { year: currentYear })}
           </span>
         </div>
       </div>
