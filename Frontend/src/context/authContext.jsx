@@ -19,14 +19,7 @@ axios.interceptors.request.use((config) => {
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(() => {
-    try {
-      const savedUser = localStorage.getItem('smart_agro_user');
-      return savedUser ? JSON.parse(savedUser) : null;
-    } catch {
-      return null;
-    }
-  });
+  const [user, setUser] = useState(null);
 
   const [isAuthenticated, setIsAuthenticated] = useState(() => {
     try {
@@ -38,10 +31,9 @@ export const AuthProvider = ({ children }) => {
 
   const [loading, setLoading] = useState(() => {
     try {
-      // If we already have a cached token, don't show blank loading screen
-      return !localStorage.getItem('smart_agro_token');
+      return Boolean(localStorage.getItem('smart_agro_token'));
     } catch {
-      return true;
+      return false;
     }
   });
 
@@ -52,11 +44,16 @@ export const AuthProvider = ({ children }) => {
   // =========================
   const initializeAuth = useCallback(async () => {
     const token = localStorage.getItem('smart_agro_token');
+    if (!token) {
+      setUser(null);
+      setIsAuthenticated(false);
+      setLoading(false);
+      return false;
+    }
     try {
-      const headers = {};
-      if (token) {
-        headers['Authorization'] = `Bearer ${token}`;
-      }
+      const headers = {
+        Authorization: `Bearer ${token}`
+      };
       const res = await axios.get(
         `${API_BASE}/api/auth/check`,
         { withCredentials: true, headers }
@@ -65,7 +62,6 @@ export const AuthProvider = ({ children }) => {
       if (res.data?.authenticated) {
         setUser(res.data.user);
         setIsAuthenticated(true);
-        localStorage.setItem('smart_agro_user', JSON.stringify(res.data.user));
         return true;
       }
 
@@ -77,13 +73,14 @@ export const AuthProvider = ({ children }) => {
       return false;
     } catch (err) {
       console.error('Auth check failed:', err);
-      // In case of transient network error or sleeping Render instance,
-      // retain user state if token was already present in storage
-      if (!token) {
+      // In case of 401/403 or invalid token, clear auth state
+      if (err.response?.status === 401 || err.response?.status === 403) {
         setUser(null);
         setIsAuthenticated(false);
+        localStorage.removeItem('smart_agro_token');
+        localStorage.removeItem('smart_agro_user');
       }
-      return Boolean(token);
+      return false;
     } finally {
       setLoading(false);
     }
@@ -108,7 +105,6 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('smart_agro_token', res.data.token);
       }
       if (res.data?.user) {
-        localStorage.setItem('smart_agro_user', JSON.stringify(res.data.user));
         setUser(res.data.user);
         setIsAuthenticated(true);
       }
@@ -132,7 +128,6 @@ export const AuthProvider = ({ children }) => {
         localStorage.setItem('smart_agro_token', res.data.token);
       }
       if (res?.data?.user) {
-        localStorage.setItem('smart_agro_user', JSON.stringify(res.data.user));
         setUser(res.data.user);
         setIsAuthenticated(true);
         return true;
