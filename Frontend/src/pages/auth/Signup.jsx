@@ -5,6 +5,7 @@ import { API_BASE_URL as apiUrl } from "../../components/api";
 import axios from "axios";
 import { motion, AnimatePresence } from "framer-motion";
 import { GoogleLogin } from "@react-oauth/google";
+import { FaGithub } from "react-icons/fa";
 import { useTranslation } from "react-i18next";
 import {
   ChevronRight,
@@ -40,6 +41,7 @@ export function Signup() {
 
   const { isAuthenticated, setUser, setIsAuthenticated, login, handleOAuthLogin } = useAuth();
   const navigate = useNavigate();
+  const GITHUB_CLIENT_ID = import.meta.env.VITE_GITHUB_CLIENT_ID;
 
   // Redirect if already authenticated
   useEffect(() => {
@@ -276,8 +278,8 @@ export function Signup() {
               exit={{ opacity: 0, x: -12 }}
               className="space-y-4"
             >
-              {/* Google Fast Signup */}
-              <div className="flex flex-col items-center">
+              {/* OAuth Fast Signup */}
+              <div className="flex flex-col items-center gap-2.5">
                 <div className="flex justify-center w-full overflow-hidden">
                   <GoogleLogin
                     onSuccess={handleGoogleSignup}
@@ -288,7 +290,19 @@ export function Signup() {
                     text="signup_with"
                   />
                 </div>
-                <div className="flex items-center w-full my-5">
+
+                {GITHUB_CLIENT_ID && (
+                  <a
+                    href={`https://github.com/login/oauth/authorize?client_id=${GITHUB_CLIENT_ID}&scope=user:email`}
+                    className="flex items-center justify-center gap-2.5 w-[240px] h-[40px] rounded-full border border-slate-300 dark:border-white/20 bg-white dark:bg-slate-900/80 text-slate-800 dark:text-slate-100 hover:bg-slate-50 dark:hover:bg-slate-800 text-xs font-semibold shadow-sm transition-all active:scale-[0.98]"
+                    aria-label="Sign up with GitHub"
+                  >
+                    <FaGithub className="text-base shrink-0" />
+                    <span>{t("signup.auth.signup_with_github", "Sign up with GitHub")}</span>
+                  </a>
+                )}
+
+                <div className="flex items-center w-full my-4">
                   <div className="flex-grow border-t border-slate-200/80 dark:border-white/10" />
                   <span className="mx-4 text-slate-600 dark:text-slate-400 text-[10px] font-bold uppercase tracking-widest shrink-0">
                     {t("signup.auth.or_use_email")}
