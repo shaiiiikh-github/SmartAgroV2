@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { FiAlertCircle, FiCpu, FiWifi, FiCheckCircle } from "react-icons/fi";
+import { useTranslation } from "react-i18next";
 import StatusBadge from "../../components/ui/StatusBadge";
 import GlassButton from "../../components/ui/GlassButton";
 
 export function SystemInsights() {
-  const [filter, setFilter] = useState("all"); // "all" | "critical" | "resolved"
+  const { t } = useTranslation();
+  const [filter, setFilter] = useState("all"); // "all" | "critical"
 
   const systemAlerts = [
     {
@@ -54,17 +56,18 @@ export function SystemInsights() {
       {/* Header */}
       <div className="mb-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <div className="flex items-center gap-2 mb-1">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <span className="glass-pill px-3 py-0.5 text-xs font-bold text-sky-900 dark:text-sky-300 uppercase tracking-wider">
-              Network Telemetry
+              {t("insights.system.network_telemetry", "Network Telemetry")}
             </span>
-            <StatusBadge status="online" size="sm" label="Mesh Gateway Operational" />
+            <StatusBadge status="online" size="sm" label={t("insights.system.mesh_operational", "Mesh Gateway Operational")} />
+            <StatusBadge status="warning" size="sm" label={t("insights.sample_data", "Sample data")} />
           </div>
           <h1 className="text-2xl sm:text-4xl font-black text-slate-950 dark:text-slate-50 tracking-tight">
-            System Diagnostics & IoT Node Health
+            {t("insights.system.title", "System Diagnostics & IoT Node Health")}
           </h1>
           <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-300 mt-1 font-medium">
-            Edge gateway latency, sensory node battery status, and automated anomaly notifications.
+            {t("insights.system.desc", "Edge gateway latency, sensory node battery status, and automated anomaly notifications.")}
           </p>
         </div>
       </div>
@@ -74,45 +77,53 @@ export function SystemInsights() {
         <div className="glass-card p-5 rounded-3xl border border-slate-900/10 dark:border-white/10">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-400">
-              Mesh Latency
+              {t("insights.system.latency", "Mesh Latency")}
             </span>
             <FiWifi className="text-sky-600 text-base" />
           </div>
           <p className="text-3xl font-black text-slate-950 dark:text-slate-50">32 ms</p>
-          <p className="text-xs text-emerald-700 dark:text-emerald-400 font-bold mt-1">Sub-second telemetry</p>
+          <p className="text-xs text-emerald-700 dark:text-emerald-400 font-bold mt-1">
+            {t("insights.system.sub_second", "Sub-second telemetry")}
+          </p>
         </div>
 
         <div className="glass-card p-5 rounded-3xl border border-slate-900/10 dark:border-white/10">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-400">
-              Nodes Online
+              {t("insights.system.nodes_online", "Nodes Online")}
             </span>
             <FiCpu className="text-emerald-600 text-base" />
           </div>
           <p className="text-3xl font-black text-slate-950 dark:text-slate-50">4 / 4</p>
-          <p className="text-xs text-emerald-700 dark:text-emerald-400 font-bold mt-1">100% Mesh Coverage</p>
+          <p className="text-xs text-emerald-700 dark:text-emerald-400 font-bold mt-1">
+            {t("insights.system.coverage", "100% Mesh Coverage")}
+          </p>
         </div>
 
         <div className="glass-card p-5 rounded-3xl border border-slate-900/10 dark:border-white/10">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-400">
-              Packet Success
+              {t("insights.system.packet_success", "Packet Success")}
             </span>
             <FiCheckCircle className="text-emerald-600 text-base" />
           </div>
           <p className="text-3xl font-black text-slate-950 dark:text-slate-50">99.98%</p>
-          <p className="text-xs text-emerald-700 dark:text-emerald-400 font-bold mt-1">Zero dropouts</p>
+          <p className="text-xs text-emerald-700 dark:text-emerald-400 font-bold mt-1">
+            {t("insights.system.zero_dropouts", "Zero dropouts")}
+          </p>
         </div>
 
         <div className="glass-card p-5 rounded-3xl border border-slate-900/10 dark:border-white/10">
           <div className="flex items-center justify-between mb-2">
             <span className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-400">
-              Active Alerts
+              {t("insights.system.active_alerts", "Active Alerts")}
             </span>
             <FiAlertCircle className="text-amber-600 text-base" />
           </div>
           <p className="text-3xl font-black text-slate-950 dark:text-slate-50">{systemAlerts.length}</p>
-          <p className="text-xs text-amber-700 dark:text-amber-400 font-bold mt-1">1 Requires Attention</p>
+          <p className="text-xs text-amber-700 dark:text-amber-400 font-bold mt-1">
+            {t("insights.system.attention", "1 Requires Attention")}
+          </p>
         </div>
       </div>
 
@@ -120,9 +131,10 @@ export function SystemInsights() {
         {/* Alerts Column */}
         <div className="glass-card p-6 rounded-3xl lg:col-span-2 border border-slate-900/10 dark:border-white/10">
           <div className="flex items-center justify-between mb-5">
-            <h2 className="text-lg font-bold text-slate-950 dark:text-slate-50 flex items-center gap-2">
+            <h2 className="text-lg font-bold text-slate-950 dark:text-slate-50 flex items-center gap-2 flex-wrap">
               <FiAlertCircle className="text-amber-600" />
-              Incident & Anomaly Feed
+              {t("insights.system.incident_feed", "Incident & Anomaly Feed")}
+              <StatusBadge status="warning" size="sm" label={t("insights.sample_data", "Sample data")} />
             </h2>
 
             <div className="glass-pill p-1 flex items-center gap-1 select-none">
@@ -137,7 +149,7 @@ export function SystemInsights() {
                       : "text-slate-700 dark:text-slate-400 hover:text-slate-950"
                   }`}
                 >
-                  {f}
+                  {f === "all" ? t("insights.system.all", "All") : t("insights.system.critical", "Critical")}
                 </button>
               ))}
             </div>
@@ -176,9 +188,10 @@ export function SystemInsights() {
 
         {/* Node Hardware Fleet */}
         <div className="glass-card p-6 rounded-3xl border border-slate-900/10 dark:border-white/10">
-          <h2 className="text-lg font-bold text-slate-950 dark:text-slate-50 mb-5 flex items-center gap-2">
+          <h2 className="text-lg font-bold text-slate-950 dark:text-slate-50 mb-5 flex items-center gap-2 flex-wrap">
             <FiCpu className="text-emerald-700 dark:text-emerald-400" />
-            Hardware Fleet Status
+            {t("insights.system.fleet_status", "Hardware Fleet Status")}
+            <StatusBadge status="warning" size="sm" label={t("insights.sample_data", "Sample data")} />
           </h2>
 
           <div className="space-y-3">
@@ -200,7 +213,7 @@ export function SystemInsights() {
 
           <div className="mt-6 pt-4 border-t border-slate-200/80 dark:border-white/10">
             <GlassButton variant="secondary" size="sm" className="w-full">
-              Run Complete Diagnostic Scan
+              {t("insights.system.run_scan", "Run Complete Diagnostic Scan")}
             </GlassButton>
           </div>
         </div>
