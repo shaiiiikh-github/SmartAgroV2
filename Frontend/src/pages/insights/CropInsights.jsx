@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
-import { FiImage, FiCalendar, FiShield, FiActivity, FiTrendingUp } from "react-icons/fi";
+import { FiImage, FiCalendar, FiShield, FiActivity, FiTrendingUp, FiTrash2 } from "react-icons/fi";
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -34,6 +34,10 @@ export function CropInsights() {
   const [telemetryData, setTelemetryData] = useState(null);
   const [isSample, setIsSample] = useState(true);
 
+  // Real leaf scan records from /api/leaf-scans
+  const [leafScans, setLeafScans] = useState([]);
+  const [isScansSample, setIsScansSample] = useState(true);
+
   useEffect(() => {
     let isMounted = true;
     api.get("/api/telemetry/history?range=7d")
@@ -52,10 +56,55 @@ export function CropInsights() {
         setTelemetryData(null);
         setIsSample(true);
       });
+
+    api.get("/api/leaf-scans?limit=10")
+      .then((res) => {
+        if (!isMounted) return;
+        if (res.data?.scans && Array.isArray(res.data.scans) && res.data.scans.length > 0) {
+          setLeafScans(res.data.scans);
+          setIsScansSample(false);
+        } else {
+          setLeafScans([]);
+          setIsScansSample(true);
+        }
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setLeafScans([]);
+        setIsScansSample(true);
+      });
+
     return () => {
       isMounted = false;
     };
   }, []);
+
+  const handleDeleteScan = async (scanId) => {
+    if (!window.confirm("Delete this scan record?")) return;
+    try {
+      await api.delete(`/api/leaf-scans/${scanId}`);
+      setLeafScans((prev) => {
+        const next = prev.filter((s) => s.id !== scanId);
+        if (next.length === 0) setIsScansSample(true);
+        return next;
+      });
+    } catch (err) {
+      alert(err.response?.data?.message || "Failed to delete scan record");
+    }
+  };
+
+  const sampleScanRows = useMemo(
+    () => [
+      { id: "s1", date: "Day 1", stage: "Emergence", health: 75, risk: 42, label: "Healthy Canopy" },
+      { id: "s2", date: "Day 3", stage: "Vegetative", health: 80, risk: 32, label: "Healthy Canopy" },
+      { id: "s3", date: "Day 5", stage: "Vegetative", health: 84, risk: 24, label: "Early Blight Suspect" },
+      { id: "s4", date: "Day 7", stage: "Tillering", health: 88, risk: 18, label: "Healthy Canopy" },
+      { id: "s5", date: "Day 9", stage: "Tillering", health: 91, risk: 12, label: "Healthy Canopy" },
+      { id: "s6", date: "Day 11", stage: "Heading", health: 89, risk: 15, label: "Healthy Canopy" },
+      { id: "s7", date: "Today", stage: "Heading", health: 94, risk: 8, label: "Optimal Canopy" },
+    ],
+    []
+  );
 
   const scanHistory = useMemo(
     () => [
@@ -211,38 +260,93 @@ export function CropInsights() {
 
       {/* Scan Log */}
       <div className="glass-card p-6 rounded-3xl border border-slate-900/10 dark:border-white/10">
-        <h3 className="text-base font-bold text-slate-950 dark:text-slate-50 mb-4 flex items-center gap-2">
-          <FiCalendar className="text-emerald-700 dark:text-emerald-400" />
-          {t("insights.crop.records", "Foliage Inspection Records")}
-        </h3>
+        <div className="flex items-center justify-between mb-4 flex-wrap gap-2">
+          <h3 className="text-base font-bold text-slate-950 dark:text-slate-50 flex items-center gap-2">
+            <FiCalendar className="text-emerald-700 dark:text-emerald-400" />
+            {t("insights.crop.records", "Foliage Inspection Records")}
+          </h3>
+          {isScansSample && (
+            <StatusBadge status="warning" size="sm" label={t("insights.sample_data", "Sample data")} />
+          )}
+        </div>
 
         <div className="overflow-x-auto w-full">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-slate-200/80 dark:border-white/10 text-[11px] font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
                 <th className="py-3 px-4">{t("insights.crop.inspection_date", "Inspection Date")}</th>
-                <th className="py-3 px-4">{t("insights.crop.stage_col", "Phenology Stage")}</th>
+                <th className="py-3 px-4">{t("insights.crop.stage_col", "Diagnosis / Stage")}</th>
                 <th className="py-3 px-4">{t("insights.crop.health_index", "Health Index")}</th>
                 <th className="py-3 px-4">{t("insights.crop.pathology_col", "Pathology Risk")}</th>
                 <th className="py-3 px-4">{t("insights.crop.action", "Action")}</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-200/60 dark:divide-white/5 text-xs text-slate-800 dark:text-slate-200 font-medium">
-              {activeCrop.map((d, i) => (
-                <tr key={i} className="hover:bg-slate-100/60 dark:hover:bg-white/5 transition-colors">
-                  <td className="py-3 px-4 font-bold text-slate-950 dark:text-slate-50">
-                    {d.date}
-                  </td>
-                  <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200">{d.stage}</td>
-                  <td className="py-3 px-4 font-black text-emerald-700 dark:text-emerald-400">
-                    {d.health}/100
-                  </td>
-                  <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200">{d.risk}%</td>
-                  <td className="py-3 px-4">
-                    <StatusBadge status={d.risk < 20 ? "online" : "warning"} size="sm" label={t("insights.crop.recorded", "Recorded")} />
-                  </td>
-                </tr>
-              ))}
+              {!isScansSample && leafScans.length > 0 ? (
+                leafScans.map((scan) => {
+                  const diseaseName = scan.prediction?.disease
+                    ? scan.prediction.disease.replace(/___/g, " — ").replace(/_/g, " ")
+                    : "Unknown";
+                  const risk = scan.prediction?.diseaseRisk ?? 0;
+                  const healthScore = Math.max(0, 100 - risk);
+                  const formattedDate = scan.createdAt
+                    ? new Date(scan.createdAt).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : "—";
+
+                  return (
+                    <tr key={scan.id} className="hover:bg-slate-100/60 dark:hover:bg-white/5 transition-colors">
+                      <td className="py-3 px-4 font-bold text-slate-950 dark:text-slate-50">
+                        {formattedDate}
+                      </td>
+                      <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200 max-w-[200px] truncate" title={diseaseName}>
+                        {diseaseName}
+                      </td>
+                      <td className="py-3 px-4 font-black text-emerald-700 dark:text-emerald-400">
+                        {healthScore}/100
+                      </td>
+                      <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200">{risk}%</td>
+                      <td className="py-3 px-4">
+                        <div className="flex items-center gap-2">
+                          <StatusBadge
+                            status={risk < 20 ? "online" : "warning"}
+                            size="sm"
+                            label={scan.prediction?.isHealthy ? "Healthy" : "Risk"}
+                          />
+                          <button
+                            onClick={() => handleDeleteScan(scan.id)}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-500/10 transition-colors"
+                            title="Delete scan"
+                            aria-label="Delete scan record"
+                          >
+                            <FiTrash2 size={13} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })
+              ) : (
+                sampleScanRows.map((d) => (
+                  <tr key={d.id} className="hover:bg-slate-100/60 dark:hover:bg-white/5 transition-colors">
+                    <td className="py-3 px-4 font-bold text-slate-950 dark:text-slate-50">
+                      {d.date}
+                    </td>
+                    <td className="py-3 px-4 font-semibold text-slate-800 dark:text-slate-200">{d.label}</td>
+                    <td className="py-3 px-4 font-black text-emerald-700 dark:text-emerald-400">
+                      {d.health}/100
+                    </td>
+                    <td className="py-3 px-4 font-bold text-slate-800 dark:text-slate-200">{d.risk}%</td>
+                    <td className="py-3 px-4">
+                      <StatusBadge status={d.risk < 20 ? "online" : "warning"} size="sm" label={t("insights.crop.recorded", "Recorded")} />
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
