@@ -31,19 +31,36 @@ export function Navbar() {
   const [profileCoords, setProfileCoords] = useState({ top: 0, left: 0 });
   const profileButtonRef = useRef(null);
 
-  // Shrink-on-scroll listener
+  // Shrink-on-scroll listener with rAF throttle for silky smooth 60fps scrolling
   useEffect(() => {
+    let ticking = false;
     const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
+      if (!ticking) {
+        window.requestAnimationFrame(() => {
+          setScrolled(window.scrollY > 20);
+          ticking = false;
+        });
+        ticking = true;
+      }
     };
     window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // Close profile menu on route change or Escape
+  // Close profile menu on route change, Escape, or orientation/resize shift
   useEffect(() => {
     setProfileOpen(false);
   }, [location.pathname]);
+
+  useEffect(() => {
+    const handleResize = () => setProfileOpen(false);
+    window.addEventListener("resize", handleResize, { passive: true });
+    window.addEventListener("orientationchange", handleResize, { passive: true });
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      window.removeEventListener("orientationchange", handleResize);
+    };
+  }, []);
 
   useEffect(() => {
     const handleKeyDown = (e) => {
