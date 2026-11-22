@@ -353,7 +353,10 @@
       "timeMinsAgo": "24 mins ago",
       "timeHoursAgo": "2 hours ago",
       "timeToday": "Today, 08:30 AM"
-    }
+    },
+    "takePhoto": "Take Photo",
+    "uploadPhoto": "Upload from Device",
+    "cameraNotSupported": "Camera not supported on this device"
   },
   "notFound": {
     "badge": "Error 404",

@@ -353,7 +353,10 @@
       "timeMinsAgo": "24 મિનિટ પહેલાં",
       "timeHoursAgo": "2 કલાક પહેલાં",
       "timeToday": "આજે, સવારે 08:30 વાગ્યે"
-    }
+    },
+    "takePhoto": "ફોટો લો",
+    "uploadPhoto": "ઉપકરણ પરથી અપલોડ કરો",
+    "cameraNotSupported": "આ ઉપકરણ પર કૅમેરા સમર્થિત નથી"
   },
   "notFound": {
     "badge": "ભૂલ 404",

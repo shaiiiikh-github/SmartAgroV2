@@ -353,7 +353,10 @@
       "timeMinsAgo": "24 मिनट पहले",
       "timeHoursAgo": "2 घंटे पहले",
       "timeToday": "आज, सुबह 08:30 बजे"
-    }
+    },
+    "takePhoto": "फोटो लें",
+    "uploadPhoto": "डिवाइस से अपलोड करें",
+    "cameraNotSupported": "इस डिवाइस पर कैमरा समर्थित नहीं है"
   },
   "notFound": {
     "badge": "त्रुटि 404",
